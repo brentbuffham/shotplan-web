@@ -70,10 +70,17 @@ export function drawDetonatorBar(s, plan) {
   }
 }
 
-/** Status line: filename, plan title, copyright. */
-export function drawStatusBar(s, filename, title) {
+/**
+ * Status line: filename, plan title, copyright — or a transient message,
+ * which takes the whole line as the original's prompts do.
+ */
+export function drawStatusBar(s, filename, title, status) {
   const y = HEIGHT - 16;
   s.fillRect(0, y, WIDTH - 1, HEIGHT - 1, BLUE);
+  if (status) {
+    s.text(status.slice(0, 80), 0, y, YELLOW, BLUE);
+    return;
+  }
   s.text((filename || '').slice(0, 14), 0, y, WHITE, BLUE);
   s.text((title || '').slice(0, 32), 15 * 8, y, WHITE, BLUE);
   s.text('Copyright 1993 IES P/L', WIDTH - 22 * 8, y, WHITE, BLUE);
@@ -192,7 +199,7 @@ export function drawPlan(s, plan, opts = {}) {
 
   // --- surface ties ---
   const byIndex = new Map(plan.holes.map((h) => [h.index + 1, h])); // links are 1-based
-  if (show.ties) {
+  if (show.ties && !show.collarsOnly) {
     for (const l of plan.links) {
       const a = byIndex.get(l.hole1);
       const b = byIndex.get(l.hole2);
@@ -232,5 +239,5 @@ export function drawScreen(s, plan, filename, opts) {
   drawMenuBar(s, opts?.activeMenu ?? -1);
   drawDetonatorBar(s, plan);
   drawPlan(s, plan, opts);
-  drawStatusBar(s, filename, plan?.title ?? '');
+  drawStatusBar(s, filename, plan?.title ?? '', opts?.status);
 }

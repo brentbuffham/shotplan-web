@@ -2,18 +2,28 @@ import { Screen, mount } from './render/screen.js';
 import { drawScreen } from './render/view.js';
 import { parseXel } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
+import { Shell, drawMenus, attachInput } from './ui/shell.js';
 
 const canvas = document.getElementById('screen');
 const screen = new Screen();
 const display = mount(canvas, screen);
+const shell = new Shell();
 
 let plan = parseXel(demoPlan());
 let filename = 'DEMO.XEL';
 
 function render() {
-  drawScreen(screen, plan, filename);
+  drawScreen(screen, plan, filename, {
+    ...shell.toggles,
+    activeMenu: shell.openMenu,
+    status: shell.status,
+  });
+  drawMenus(screen, shell);
   display.present();
 }
+
+shell.onChange = render;
+attachInput(canvas, shell);
 render();
 
 // --- integer scaling -------------------------------------------------------
