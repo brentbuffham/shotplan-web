@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+
+# Sample plans are archival material and stay in the private repo
+*.XEL
+*.xel
