@@ -8,7 +8,7 @@
  */
 import {
   WIDTH, HEIGHT, BLACK, BLUE, CYAN, WHITE, YELLOW, LIGHTGREEN, LIGHTCYAN,
-  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA,
+  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 
@@ -22,18 +22,29 @@ const MENUS = [
   { label: 'Quit', hot: 0 },
 ];
 
-/** Menu bar. Hotkey letters render yellow, everything else white on blue. */
+/**
+ * Menu bar. Hotkey letters render yellow and underlined; the active menu
+ * inverts to yellow-on-blue.
+ *
+ * Measured from a 1x screenshot: one leading column, then four spaces between
+ * labels. That puts "Quit" ending around column 71, which is what the original
+ * does — a two-space gap only reaches column 56.
+ */
+const MENU_START = 1;
+const MENU_GAP = 4;
+
 export function drawMenuBar(s, active = -1) {
   s.fillRect(0, 0, WIDTH - 1, 15, BLUE);
-  let col = 0;
+  let col = MENU_START;
   MENUS.forEach((m, i) => {
     const x = col * 8;
-    const bg = i === active ? CYAN : BLUE;
-    if (i === active) s.fillRect(x, 0, x + m.label.length * 8 - 1, 15, bg);
-    s.text(m.label, x, 0, WHITE, bg);
-    // hotkey highlight
-    s.glyph(m.label.charCodeAt(m.hot), x + m.hot * 8, 0, YELLOW, bg);
-    col += m.label.length + 2;
+    const fg = i === active ? YELLOW : WHITE;
+    s.text(m.label, x, 0, fg, BLUE);
+    // Hotkey: yellow, with the underline the original draws.
+    const hx = x + m.hot * 8;
+    s.glyph(m.label.charCodeAt(m.hot), hx, 0, YELLOW, BLUE);
+    s.hline(hx, hx + 7, 14, YELLOW);
+    col += m.label.length + MENU_GAP;
   });
 }
 
@@ -43,15 +54,19 @@ export function drawMenuBar(s, active = -1) {
  */
 export function drawDetonatorBar(s, plan) {
   s.fillRect(0, 16, WIDTH - 1, 31, BLUE);
-  const colours = [WHITE, LIGHTGREEN, LIGHTCYAN, WHITE, LIGHTMAGENTA, YELLOW, LIGHTGREY, LIGHTGREY];
+  // Each slot previews the tie-line style it draws with: a short line segment
+  // in that detonator's colour, then the product name. CP437 0xC4 is the
+  // single horizontal box-drawing rule.
+  const colours = [WHITE, GREEN, LIGHTGREEN, WHITE, LIGHTMAGENTA, LIGHTCYAN, BROWN, LIGHTGREY];
   const surface = plan ? plan.detonators.filter((d) => d.kind === 'surface') : [];
   for (let i = 0; i < 8; i++) {
     const x = i * 10 * 8;
     const d = surface[i];
     const name = d && d.defined ? d.description : 'Not Def.';
-    // connector glyph: a short arrow, drawn as CP437 box/arrow characters
-    s.glyph(0x1a, x, 16, colours[i], BLUE); // right arrow
-    s.text(name.slice(0, 8), x + 8, 16, colours[i], BLUE);
+    const c = colours[i % colours.length];
+    s.glyph(0xc4, x, 16, c, BLUE);
+    s.glyph(0xc4, x + 8, 16, c, BLUE);
+    s.text(name.slice(0, 8), x + 16, 16, c, BLUE);
   }
 }
 
@@ -64,13 +79,47 @@ export function drawStatusBar(s, filename, title) {
   s.text('Copyright 1993 IES P/L', WIDTH - 22 * 8, y, WHITE, BLUE);
 }
 
-/** Plot area geometry, in pixels. */
-export const PLOT = { x0: 8, y0: 36, x1: WIDTH - 9, y1: HEIGHT - 22 };
+/**
+ * Plot area geometry.
+ *
+ * The original frames the plan in a thick white rectangle sitting on the cyan
+ * desktop, with black inside — not a dotted border. Measured off a screenshot
+ * of v3.0: the frame insets roughly 16px horizontally, starts at y=48 (just
+ * below the detonator bar) and ends around y=440, leaving a cyan band above
+ * the status line.
+ */
+export const FRAME = { x0: 16, y0: 48, x1: WIDTH - 17, y1: 440 };
+const FRAME_THICKNESS = 3;
 
-/** A dotted border, as the original draws around the plan area. */
-function dottedRect(s, x0, y0, x1, y1, c) {
-  for (let x = x0; x <= x1; x += 2) { s.px(x, y0, c); s.px(x, y1, c); }
-  for (let y = y0; y <= y1; y += 2) { s.px(x0, y, c); s.px(x1, y, c); }
+/** Black drawing surface inside the white frame. */
+export const PLOT = {
+  x0: FRAME.x0 + FRAME_THICKNESS,
+  y0: FRAME.y0 + FRAME_THICKNESS,
+  x1: FRAME.x1 - FRAME_THICKNESS,
+  y1: FRAME.y1 - FRAME_THICKNESS,
+};
+
+/**
+ * Scale bar, bottom-right inside the plot: a distance label and a bracketed
+ * rule. The original picks a round distance and sizes the rule to match.
+ */
+function drawScaleBar(s, t) {
+  if (!t) return;
+  // Choose a round world distance that renders 40..120 px wide.
+  const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
+  let metres = nice[nice.length - 1];
+  for (const m of nice) {
+    if (m * t.scale >= 40) { metres = m; break; }
+  }
+  const w = Math.round(metres * t.scale);
+  const y = PLOT.y1 - 10;
+  const x1 = PLOT.x1 - 10;
+  const x0 = x1 - w;
+  s.hline(x0, x1, y, WHITE);
+  s.vline(x0, y - 4, y + 4, WHITE);
+  s.vline(x1, y - 4, y + 4, WHITE);
+  const label = `${metres}m`;
+  s.text(label, x0 - label.length * 8 - 6, y - 7, WHITE);
 }
 
 /**
@@ -89,7 +138,8 @@ export function fitTransform(bounds, pad = 12) {
   return {
     scale,
     x: (e) => Math.round(ox + (e - bounds.minE) * scale),
-    y: (n) => Math.round(oy + h - (n - bounds.minN) * scale - (h - dn * scale)),
+    // Northing increases up, screen y increases down, so flip about maxN.
+    y: (n) => Math.round(oy + (bounds.maxN - n) * scale),
   };
 }
 
@@ -105,8 +155,9 @@ export function drawPlan(s, plan, opts = {}) {
     collarsOnly: false, ...opts,
   };
 
+  // White frame on the cyan desktop, black plotting surface inside.
+  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
   s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
-  dottedRect(s, PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLUE);
   if (!plan) return;
 
   const t = fitTransform(planBounds(plan));
@@ -127,7 +178,9 @@ export function drawPlan(s, plan, opts = {}) {
   // --- benches: crest and foot polylines ---
   if (show.benches) {
     for (const bench of plan.benches) {
-      for (const [pts, colour] of [[bench.crest, BROWNISH()], [bench.foot, GREEN]]) {
+      // Observed green in v3.0. Crest and foot are identical in the only
+      // sample available, so whether they differ in colour is unconfirmed.
+      for (const [pts, colour] of [[bench.crest, GREEN], [bench.foot, GREEN]]) {
         for (let i = 0; i + 1 < pts.length; i++) {
           const a = pts[i], b = pts[i + 1];
           if (a.e === null || b.e === null) continue;
@@ -169,13 +222,8 @@ export function drawPlan(s, plan, opts = {}) {
     }
   }
 
+  drawScaleBar(s, t);
   s.resetClip();
-}
-
-// The original's bench crest colour is a warm tone; brown reads closest on the
-// EGA palette. TODO: confirm against a screenshot with benches displayed.
-function BROWNISH() {
-  return 6;
 }
 
 /** Draw the whole screen. */
