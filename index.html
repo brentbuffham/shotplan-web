@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SHOTPlan v3.0 — web rebuild</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #101014;
+    color: #aaa;
+    font: 13px/1.5 ui-monospace, Consolas, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  /* Integer scaling only. Anything else resamples the pixel grid. */
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    width: calc(640px * var(--scale, 1));
+    height: calc(480px * var(--scale, 1));
+    border: 1px solid #333;
+    background: #000;
+  }
+  #bar { display: flex; gap: 16px; align-items: center; }
+  #drop { color: #666; }
+  #drop.over { color: #6f6; }
+  button, select { font: inherit; background: #222; color: #ccc; border: 1px solid #444; padding: 2px 8px; }
+</style>
+</head>
+<body>
+  <canvas id="screen"></canvas>
+  <div id="bar">
+    <label>scale
+      <select id="scale">
+        <option value="1">1x</option>
+        <option value="2" selected>2x</option>
+        <option value="3">3x</option>
+      </select>
+    </label>
+    <span id="drop">drop a .XEL file here to load a plan</span>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -5,3 +5,7 @@ dist/
 # Sample plans are archival material and stay in the private repo
 *.XEL
 *.xel
+
+# Font pack is redistributable but bulky; extract-font.js regenerates
+# src/render/font-data.js from it. Keep the pack out of the repo.
+font/
