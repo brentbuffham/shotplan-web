@@ -167,10 +167,11 @@ export function drawPlan(s, plan, opts = {}) {
   s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
   if (!plan) return;
 
-  const t = fitTransform(planBounds(plan));
+  // A viewport transform wins when navigation is active; otherwise fit.
+  const t = opts.transform ?? fitTransform(planBounds(plan));
   if (!t) return;
 
-  s.setClip(PLOT.y0 + 1, PLOT.y1);
+  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
 
   // --- boundary polygon ---
   if (show.boundary && plan.boundary.length > 1) {
@@ -229,8 +230,31 @@ export function drawPlan(s, plan, opts = {}) {
     }
   }
 
+  // --- highlighted hole (hover / selection) ---
+  if (opts.highlight && opts.highlight.e !== null) {
+    const x = t.x(opts.highlight.e), y = t.y(opts.highlight.n);
+    s.circle(x, y, r + 3, YELLOW);
+    s.circle(x, y, r + 4, YELLOW);
+  }
+
+  // --- rubber-band zoom rectangle ---
+  if (opts.rubber) {
+    const { x0, y0, x1, y1 } = opts.rubber;
+    dashedRect(s, Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1), YELLOW);
+  }
+
   drawScaleBar(s, t);
   s.resetClip();
+}
+
+/** Marching-ant style rectangle for the zoom window. */
+function dashedRect(s, x0, y0, x1, y1, c) {
+  for (let x = x0; x <= x1; x++) {
+    if ((x >> 1) % 2 === 0) { s.px(x, y0, c); s.px(x, y1, c); }
+  }
+  for (let y = y0; y <= y1; y++) {
+    if ((y >> 1) % 2 === 0) { s.px(x0, y, c); s.px(x1, y, c); }
+  }
 }
 
 /** Draw the whole screen. */

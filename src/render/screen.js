@@ -51,27 +51,38 @@ export class Screen {
     this.width = width;
     this.height = height;
     this.buf = new Uint8Array(width * height);
-    this.clipTop = 0;
-    this.clipBottom = height;
+    this.resetClip();
   }
 
   clear(colour = BLACK) {
     this.buf.fill(colour);
   }
 
-  /** Restrict drawing to a horizontal band — used to keep the plan inside its box. */
-  setClip(top, bottom) {
-    this.clipTop = Math.max(0, top | 0);
-    this.clipBottom = Math.min(this.height, bottom | 0);
+  /**
+   * Restrict drawing to a rectangle, inclusive of all four edges.
+   *
+   * This has to clip horizontally as well as vertically: once the plan can be
+   * zoomed, tie lines run off the sides of the plot area, not just the top and
+   * bottom, and would otherwise draw over the frame and the cyan desktop.
+   */
+  setClip(x0, y0, x1, y1) {
+    this.clipLeft = Math.max(0, x0 | 0);
+    this.clipTop = Math.max(0, y0 | 0);
+    this.clipRight = Math.min(this.width - 1, x1 | 0);
+    this.clipBottom = Math.min(this.height - 1, y1 | 0);
   }
+
   resetClip() {
+    this.clipLeft = 0;
     this.clipTop = 0;
-    this.clipBottom = this.height;
+    this.clipRight = this.width - 1;
+    this.clipBottom = this.height - 1;
   }
 
   px(x, y, c) {
     x |= 0; y |= 0;
-    if (x < 0 || x >= this.width || y < this.clipTop || y >= this.clipBottom) return;
+    if (x < this.clipLeft || x > this.clipRight) return;
+    if (y < this.clipTop || y > this.clipBottom) return;
     this.buf[y * this.width + x] = c;
   }
 

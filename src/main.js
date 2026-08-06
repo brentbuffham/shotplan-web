@@ -1,6 +1,6 @@
 import { Screen, mount } from './render/screen.js';
 import { drawScreen } from './render/view.js';
-import { parseXel } from './format/xel.js';
+import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
 
@@ -9,14 +9,23 @@ const screen = new Screen();
 const display = mount(canvas, screen);
 const shell = new Shell();
 
-let plan = parseXel(demoPlan());
 let filename = 'DEMO.XEL';
 
+function load(plan, name) {
+  filename = name;
+  shell.planBounds = planBounds(plan);
+  shell.setPlan(plan, shell.planBounds);
+  render();
+}
+
 function render() {
-  drawScreen(screen, plan, filename, {
+  drawScreen(screen, shell.plan, filename, {
     ...shell.toggles,
     activeMenu: shell.openMenu,
-    status: shell.status,
+    status: shell.statusLine(),
+    transform: shell.view.transform(),
+    highlight: shell.highlight,
+    rubber: shell.drag,
   });
   drawMenus(screen, shell);
   display.present();
@@ -24,7 +33,7 @@ function render() {
 
 shell.onChange = render;
 attachInput(canvas, shell);
-render();
+load(parseXel(demoPlan()), 'DEMO.XEL');
 
 // --- integer scaling -------------------------------------------------------
 const scaleSel = document.getElementById('scale');
@@ -49,10 +58,9 @@ document.addEventListener('drop', async (e) => {
     const buf = new Uint8Array(await file.arrayBuffer());
     let text = '';
     for (let i = 0; i < buf.length; i++) text += String.fromCharCode(buf[i]);
-    plan = parseXel(text);
-    filename = file.name.toUpperCase();
+    const plan = parseXel(text);
+    load(plan, file.name.toUpperCase());
     drop.textContent = `${filename} — ${plan.holes.length} records, ${plan.links.length} ties`;
-    render();
   } catch (err) {
     drop.textContent = `failed to parse ${file.name}: ${err.message}`;
     console.error(err);

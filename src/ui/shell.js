@@ -12,7 +12,16 @@
  * canvas — right-drag is a real input, not a page gesture.
  */
 import { WIDTH, BLUE, CYAN, WHITE, YELLOW, BLACK, LIGHTGREY } from '../render/screen.js';
+import { PLOT } from '../render/view.js';
 import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
+import { ViewState, pickHole } from './viewstate.js';
+
+/** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
+const ZOOM_PROMPT =
+  'Left/Ins button accept zoom window - Right/Del button expand/contract.';
+
+const inPlot = (px, py) =>
+  px >= PLOT.x0 && px <= PLOT.x1 && py >= PLOT.y0 && py <= PLOT.y1;
 
 const CELL_W = 8;
 const CELL_H = 16;
@@ -39,6 +48,30 @@ export class Shell {
     this.hoverSub = -1;
     this.status = '';        // transient message line
     this.onChange = () => {};
+
+    // --- plan navigation ---
+    this.view = new ViewState();
+    this.plan = null;
+    this.zoomMode = false;   // Show > Zoom / Edit > Window > Zoom
+    this.drag = null;        // {x0,y0,x1,y1} while dragging a zoom window
+    this.pan = null;         // {px,py} while right-dragging
+    this.highlight = null;   // hole under the cursor
+    this.readout = '';       // cursor position / hole data
+  }
+
+  /** Called when a new plan is loaded. */
+  setPlan(plan, bounds) {
+    this.plan = plan;
+    this.view.overview(bounds);
+    this.highlight = null;
+    this.readout = '';
+  }
+
+  /** What the status line should show right now. */
+  statusLine() {
+    if (this.status) return this.status;
+    if (this.zoomMode || this.drag) return ZOOM_PROMPT;
+    return this.readout;
   }
 
   /** Geometry of the open dropdown, in pixels. */
@@ -94,8 +127,45 @@ export class Shell {
 
   // ---- events -------------------------------------------------------------
 
+  /** Cursor over the plan: survey readout, hole pick, rubber band, pan. */
+  plotMove(px, py) {
+    const t = this.view.transform();
+    if (!t || !inPlot(px, py)) {
+      if (this.readout) { this.readout = ''; this.highlight = null; return true; }
+      return false;
+    }
+    if (this.drag) { this.drag.x1 = px; this.drag.y1 = py; return true; }
+    if (this.pan) {
+      const dt = this.view.transform();
+      this.view.panBy(
+        (this.pan.px - px) / dt.scale,
+        (py - this.pan.py) / dt.scale
+      );
+      this.pan = { px, py };
+      return true;
+    }
+
+    const hole = pickHole(this.plan, t, px, py);
+    const e = t.toE(px), n = t.toN(py);
+    const before = this.readout;
+    if (hole) {
+      // Hole numbers are 1-based in the tie-up table, so report them that way.
+      this.readout =
+        `Hole ${String(hole.index + 1).padStart(4)}  ` +
+        `mE ${e.toFixed(2)}  mN ${n.toFixed(2)}  ` +
+        `dep ${hole.depth.toFixed(2)}  ang ${hole.angle.toFixed(1)}  ` +
+        `dly ${hole.delay}` + (hole.dummy ? '  DUMMY' : '');
+    } else {
+      this.readout = `mE ${e.toFixed(2)}   mN ${n.toFixed(2)}`;
+    }
+    const changed = this.highlight !== hole || before !== this.readout;
+    this.highlight = hole;
+    return changed;
+  }
+
   mouseMove(px, py) {
     let changed = false;
+    if (this.openMenu < 0 && this.plotMove(px, py)) changed = true;
     if (this.openMenu >= 0) {
       const sub = this.submenuBox();
       const si = this.hitBox(sub, px, py);
@@ -146,17 +216,71 @@ export class Shell {
       }
       // Clicked away — close.
       this.close();
+      return;
+    }
+    // --- plan area: begin a zoom window ---
+    if (inPlot(px, py)) {
+      this.status = '';
+      this.drag = { x0: px, y0: py, x1: px, y1: py };
+      this.onChange();
     }
   }
 
-  /** Right button: abort, exactly as the original's prompts describe. */
-  rightClick() {
+  /** Left release: accept the zoom window, if it is big enough to mean it. */
+  leftRelease(px, py) {
+    if (!this.drag) return;
+    const d = this.drag;
+    // Take the end point from the release itself. Relying on the last
+    // mousemove loses the corner when the browser coalesces move events.
+    d.x1 = px;
+    d.y1 = py;
+    this.drag = null;
+    const t = this.view.transform();
+    const w = Math.abs(d.x1 - d.x0);
+    const h = Math.abs(d.y1 - d.y0);
+    if (t && w > 4 && h > 4) {
+      const e0 = t.toE(Math.min(d.x0, d.x1));
+      const e1 = t.toE(Math.max(d.x0, d.x1));
+      const n0 = t.toN(Math.max(d.y0, d.y1));
+      const n1 = t.toN(Math.min(d.y0, d.y1));
+      this.view.set({ minE: e0, maxE: e1, minN: n0, maxN: n1 });
+      this.zoomMode = false;
+    }
+    this.plotMove(px, py);
+    this.onChange();
+  }
+
+  /**
+   * Right button: abort, exactly as the original's prompts describe. Over the
+   * plan with nothing in progress it contracts the view, which is what
+   * "Right/Del button expand/contract" means.
+   */
+  rightClick(px, py) {
+    if (this.drag) { this.drag = null; this.onChange(); return; }
     if (this.openSub >= 0) {
       this.openSub = -1;
       this.hoverSub = -1;
-    } else {
+    } else if (this.openMenu >= 0) {
       this.close();
+      return;
+    } else if (inPlot(px, py)) {
+      this.view.contract();
+      this.plotMove(px, py);
     }
+    this.onChange();
+  }
+
+  /** Wheel zoom about the cursor. Not original; a concession to the mouse. */
+  wheel(px, py, deltaY) {
+    if (this.openMenu >= 0 || !inPlot(px, py)) return;
+    const t = this.view.transform();
+    if (!t) return;
+    const e = t.toE(px), n = t.toN(py);
+    this.view.scale(deltaY > 0 ? 1.25 : 0.8);
+    // Keep the point under the cursor fixed.
+    const t2 = this.view.transform();
+    this.view.panBy(e - t2.toE(px), n - t2.toN(py));
+    this.plotMove(px, py);
     this.onChange();
   }
 
@@ -186,6 +310,27 @@ export class Shell {
       this.toggles.collarsOnly = !this.toggles.collarsOnly;
       this.onChange();
       return;
+    }
+    // Navigation — the original's Window vocabulary, shared by Show and Edit.
+    switch (item.label) {
+      case 'Overview':
+        this.view.overview(this.planBounds);
+        this.status = '';
+        this.close();
+        return;
+      case 'Zoom':
+        this.zoomMode = true;
+        this.status = '';
+        this.close();
+        return;
+      case 'Expand':
+        this.view.expand();
+        this.close();
+        return;
+      case 'Contract':
+        this.view.contract();
+        this.close();
+        return;
     }
     // Everything else is not implemented yet. Say so plainly rather than
     // silently doing nothing, which reads as a broken click.
@@ -255,8 +400,18 @@ export function attachInput(canvas, shell) {
   canvas.addEventListener('mousedown', (e) => {
     const [x, y] = toPixels(e);
     if (e.button === 2) shell.rightClick(x, y);
+    else if (e.button === 1) { shell.pan = { px: x, py: y }; e.preventDefault(); }
     else shell.leftClick(x, y);
   });
+  window.addEventListener('mouseup', (e) => {
+    const [x, y] = toPixels(e);
+    if (e.button === 1) shell.pan = null;
+    else if (e.button === 0) shell.leftRelease(x, y);
+  });
+  canvas.addEventListener('wheel', (e) => {
+    shell.wheel(...toPixels(e), e.deltaY);
+    e.preventDefault();
+  }, { passive: false });
   // Right-drag is a real input in this program, so the page menu must not fire.
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => {
