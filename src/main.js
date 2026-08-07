@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -22,6 +22,14 @@ function load(plan, name) {
 }
 
 function render() {
+  if (shell.quantities) {
+    drawQuantities(screen, shell.plan);
+    drawMenuBar(screen, shell.openMenu);
+    drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
+    drawMenus(screen, shell);
+    display.present();
+    return;
+  }
   if (shell.contour && shell.contour.mode === 'Relief') {
     drawRelief(screen, shell.plan, shell.contour.field, {
       transform: shell.view.transform(),

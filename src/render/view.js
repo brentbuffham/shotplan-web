@@ -15,6 +15,7 @@ import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
 import { histogram, envelopeSummary, holesInSlice } from '../calc/envelope.js';
 import { BANDS, bandOf } from '../calc/overlap.js';
 import { contours, firstMovement } from '../calc/contour.js';
+import { quantities } from '../calc/quantities.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -740,6 +741,42 @@ export function drawRelief(s, plan, field, opts = {}) {
 
   drawScaleBar(s, t);
   s.resetClip();
+}
+
+/**
+ * Calculations > Quantities - a text report, in the original's own headings
+ * and column layout.
+ */
+export function drawQuantities(s, plan) {
+  s.clear(BLUE);
+  if (!plan) return;
+  const q = quantities(plan);
+  const L = (row, text, colour = WHITE) => s.text(text, 16, 40 + row * 16, colour);
+
+  L(0, '=========== SHOTPlan QUANTITIES SUMMARY ============', LIGHTCYAN);
+  L(2, `Number of holes defined  : ${String(q.counts.defined).padStart(6)}`);
+  L(3, `Number of blast-holes    : ${String(q.counts.blast).padStart(6)}`);
+  L(4, `Number of dummy holes    : ${String(q.counts.dummy).padStart(6)}`);
+  L(5, `Number of surface ties   : ${String(q.counts.ties).padStart(6)}`);
+
+  L(7, '  Product               Length usage                          Total', LIGHTCYAN);
+  L(8, '  ' + '-'.repeat(66), LIGHTGREY);
+
+  let row = 9;
+  const MAX_ROWS = 16;
+  for (const p of q.products.slice(0, MAX_ROWS)) {
+    L(row++, `  ${p.description ?? p.name}`.padEnd(24)
+      + `${p.count} x`.padStart(7)
+      + `${p.length.toFixed(1)} m`.padStart(14)
+      + `${p.required} metres required`.padStart(28));
+  }
+  if (q.products.length > MAX_ROWS) {
+    L(row++, `  ... and ${q.products.length - MAX_ROWS} more products`, LIGHTGREY);
+  }
+  L(row + 1, '  ' + '-'.repeat(66), LIGHTGREY);
+  L(row + 2, '  TOTAL'.padEnd(24) + ' '.padStart(7)
+    + `${q.totalLength.toFixed(1)} m`.padStart(14)
+    + `${q.totalRequired} metres required`.padStart(28), YELLOW);
 }
 
 /** Dotted polyline, as v3.0 draws contours. */

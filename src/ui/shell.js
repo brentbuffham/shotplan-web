@@ -70,6 +70,7 @@ export class Shell {
     this.envelope = null;    // {mode: 'Display'|'Explore'} when showing it
     this.overlap = null;     // {metric, result} when showing Overlap
     this.contour = null;     // {mode, field, step} when showing contours
+    this.quantities = false; // showing the Quantities report
   }
 
   /**
@@ -208,6 +209,7 @@ export class Shell {
     this.envelope = null;
     this.overlap = null;
     this.contour = null;
+    this.quantities = false;
     this.recompute();
   }
 
@@ -229,6 +231,7 @@ export class Shell {
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.quantities) return 'Quantities summary      Right/DEL or ESC to exit';
     if (this.contour) {
       // Both captions verbatim from SHOTPLAN.OVR (0x18037, 0x15D54).
       if (this.contour.mode === 'First Movement') {
@@ -449,6 +452,7 @@ export class Shell {
    * "Right/Del button expand/contract" means.
    */
   rightClick(px, py) {
+    if (this.quantities) { this.quantities = false; this.onChange(); return; }
     if (this.contour) { this.stopContours(); return; }
     if (this.overlap) { this.stopOverlap(); return; }
     if (this.envelope) { this.stopEnvelope(); return; }
@@ -481,6 +485,7 @@ export class Shell {
   }
 
   key(k) {
+    if (this.quantities && k === 'Escape') { this.quantities = false; this.onChange(); return; }
     if (this.contour && k === 'Escape') { this.stopContours(); return; }
     if (this.overlap && k === 'Escape') { this.stopOverlap(); return; }
     if (this.envelope && k === 'Escape') { this.stopEnvelope(); return; }
@@ -544,6 +549,14 @@ export class Shell {
       return;
     }
     if (item.label === 'Relief') { this.startContours('Relief'); return; }
+    if (item.label === 'Quantities') {
+      // Needs no timing and no product database - it counts holes and adds up
+      // lengths, which is why v3.0 keeps it available when nothing else is.
+      this.quantities = true;
+      this.status = '';
+      this.close();
+      return;
+    }
     if (item.label === 'Crowding 80%') { this.startOverlap('crowding'); return; }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.
     switch (item.label) {
