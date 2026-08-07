@@ -46,6 +46,16 @@ export const BLACK = 0, BLUE = 1, GREEN = 2, CYAN = 3, RED = 4, MAGENTA = 5,
   BROWN = 6, LIGHTGREY = 7, DARKGREY = 8, LIGHTBLUE = 9, LIGHTGREEN = 10,
   LIGHTCYAN = 11, LIGHTRED = 12, LIGHTMAGENTA = 13, YELLOW = 14, WHITE = 15;
 
+/** Typographic characters folded to their codepage-437 equivalents. */
+const CP437_FOLD = {
+  '—': 0x2d, '–': 0x2d,   // em / en dash -> hyphen
+  '‘': 0x27, '’': 0x27,   // curly single quotes
+  '“': 0x22, '”': 0x22,   // curly double quotes
+  '…': 0x2e,                   // ellipsis -> full stop
+  '°': 0xf8, '±': 0xf1,   // degree, plus-minus exist in CP437
+  'µ': 0xe6, '≥': 0xf2, '≤': 0xf3,
+};
+
 export class Screen {
   constructor(width = WIDTH, height = HEIGHT) {
     this.width = width;
@@ -167,10 +177,20 @@ export class Screen {
     }
   }
 
-  /** Draw a string at pixel position. */
+  /**
+   * Draw a string at pixel position.
+   *
+   * The font is codepage 437, so anything outside it has no glyph. Rather than
+   * masking the code point - which silently turns an em dash into the
+   * paragraph mark at 0x14 - unmapped characters render as '?', which is
+   * visible and traceable. Common typographic substitutes are folded to their
+   * ASCII equivalents first.
+   */
   text(str, x, y, fg, bg = -1) {
     for (let i = 0; i < str.length; i++) {
-      this.glyph(str.charCodeAt(i), x + i * GLYPH_WIDTH, y, fg, bg);
+      let c = str.codePointAt(i);
+      if (c > 0xff) c = CP437_FOLD[str[i]] ?? 0x3f;
+      this.glyph(c, x + i * GLYPH_WIDTH, y, fg, bg);
     }
   }
 

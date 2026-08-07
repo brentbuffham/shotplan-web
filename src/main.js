@@ -84,7 +84,7 @@ async function boot() {
     if (res.ok) {
       const buf = new Uint8Array(await res.arrayBuffer());
       load(parseXel(decodeXel(buf)), 'TEST3.XEL');
-      drop.textContent = `TEST3.XEL — ${shell.plan.holes.length} records, ${shell.plan.links.length} ties`;
+      drop.textContent = `TEST3.XEL - ${shell.plan.holes.length} records, ${shell.plan.links.length} ties`;
       return;
     }
   } catch { /* no local sample; fall through */ }
@@ -122,7 +122,7 @@ document.addEventListener('drop', async (e) => {
     }
     const plan = parseXel(decodeXel(buf));
     load(plan, file.name.toUpperCase());
-    drop.textContent = `${filename} — ${plan.holes.length} records, ${plan.links.length} ties`;
+    drop.textContent = `${filename} - ${plan.holes.length} records, ${plan.links.length} ties`;
   } catch (err) {
     drop.textContent = `failed to parse ${file.name}: ${err.message}`;
     console.error(err);

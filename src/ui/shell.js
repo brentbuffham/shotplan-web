@@ -460,7 +460,7 @@ export class Shell {
     }
     // Everything else is not implemented yet. Say so plainly rather than
     // silently doing nothing, which reads as a broken click.
-    this.status = `${menuLabel} / ${item.label} — not implemented yet`;
+    this.status = `${menuLabel} / ${item.label} - not implemented yet`;
     this.close();
   }
 
