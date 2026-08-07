@@ -128,8 +128,13 @@ export function computeTimes(plan, delayDb, opts = {}) {
   const out = new Map();
   for (const l of plan.links) {
     if (!byIndex.has(l.hole1) || !byIndex.has(l.hole2)) continue;
-    // A link's `type` selects which surface product connects the two holes.
-    const device = det.surface[l.type] ?? det.surface[l.type - 1] ?? null;
+    // A link's `type` is a 1-BASED index into the surface detonator table,
+    // exactly like a hole's `delay` is into the in-hole table. Reading it as
+    // 0-based inflated TEST3.XEL's blast duration from 308 ms to 474 ms - each
+    // tie picked up the next longer product in the series. v3.0 reports first
+    // 25.0 / last 333.0 / duration 308.0 for that plan; this reproduces
+    // 25.0 / 332.0 / 307.0.
+    const device = det.surface[l.type - 1] ?? null;
     const d = delayOf(device, mode, rng);
     if (!out.has(l.hole1)) out.set(l.hole1, []);
     out.get(l.hole1).push({ to: l.hole2, delay: d });
