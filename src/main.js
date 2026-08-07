@@ -26,6 +26,7 @@ function render() {
     transform: shell.view.transform(),
     highlight: shell.highlight,
     rubber: shell.drag,
+    isOverview: shell.view.isOverview,
   });
   drawMenus(screen, shell);
   display.present();

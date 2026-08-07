@@ -69,7 +69,7 @@ export class Shell {
    */
   setPlan(plan, bounds) {
     this.plan = plan;
-    this.view.overview(bounds);
+    this.view.overview(bounds, plan);
     this.highlight = null;
     this.readout = '';
     this.toggles = { ...DEFAULT_TOGGLES };
@@ -257,7 +257,7 @@ export class Shell {
       const e1 = t.toE(Math.max(d.x0, d.x1));
       const n0 = t.toN(Math.max(d.y0, d.y1));
       const n1 = t.toN(Math.min(d.y0, d.y1));
-      this.view.set({ minE: e0, maxE: e1, minN: n0, maxN: n1 });
+      this.view.zoomTo({ minE: e0, maxE: e1, minN: n0, maxN: n1 });
       this.zoomMode = false;
     }
     this.plotMove(px, py);
@@ -328,7 +328,7 @@ export class Shell {
     // Navigation — the original's Window vocabulary, shared by Show and Edit.
     switch (item.label) {
       case 'Overview':
-        this.view.overview(this.planBounds);
+        this.view.overview(this.planBounds, this.plan);
         this.status = '';
         this.close();
         return;

@@ -16,10 +16,20 @@ const MIN_SPAN = 0.5; // metres; stops zoom collapsing to a point
 export class ViewState {
   constructor() {
     this.bounds = null; // {minE, maxE, minN, maxN}
+    // The plot frame is drawn differently in each state: solid white on a cyan
+    // desktop for Overview, dashed on blue for Zoom. So the view has to know
+    // which it is in, not just where it is looking.
+    this.isOverview = true;
   }
 
-  /** Fit the whole plan, with a margin. This is "Overview". */
-  overview(planBounds, margin = 0.06) {
+  /**
+   * Fit the whole plan, with a margin. This is "Overview".
+   *
+   * If the plan carries text annotations, a second pass widens the view so
+   * they fit. Text is drawn at a fixed pixel size, so its world extent is only
+   * known once a scale exists — hence fit, measure, widen.
+   */
+  overview(planBounds, plan = null, margin = 0.06) {
     if (!planBounds) { this.bounds = null; return; }
     const de = Math.max(MIN_SPAN, planBounds.maxE - planBounds.minE);
     const dn = Math.max(MIN_SPAN, planBounds.maxN - planBounds.minN);
@@ -29,6 +39,17 @@ export class ViewState {
       minE: planBounds.minE - mx, maxE: planBounds.maxE + mx,
       minN: planBounds.minN - my, maxN: planBounds.maxN + my,
     });
+    if (plan?.texts?.length) {
+      const t = this.transform();
+      let maxE = this.bounds.maxE;
+      for (const tx of plan.texts) {
+        if (tx.e === null) continue;
+        const need = tx.e + (10 + tx.text.length * 8) / t.scale;
+        if (need > maxE) maxE = need;
+      }
+      if (maxE > this.bounds.maxE) this.set({ ...this.bounds, maxE });
+    }
+    this.isOverview = true;
   }
 
   /** Set the viewport, correcting aspect by growing the short axis. */
@@ -48,8 +69,15 @@ export class ViewState {
     };
   }
 
+  /** Zoom to an explicit world rectangle. Leaves Overview. */
+  zoomTo(b) {
+    this.set(b);
+    this.isOverview = false;
+  }
+
   /** Zoom about the viewport centre. factor < 1 zooms in. */
   scale(factor) {
+    this.isOverview = false;
     if (!this.bounds) return;
     const b = this.bounds;
     const cx = (b.minE + b.maxE) / 2;
@@ -65,6 +93,7 @@ export class ViewState {
   /** Recentre without changing scale. */
   panTo(e, n) {
     if (!this.bounds) return;
+    this.isOverview = false;
     const b = this.bounds;
     const de = b.maxE - b.minE;
     const dn = b.maxN - b.minN;
@@ -77,6 +106,7 @@ export class ViewState {
   /** Shift by a world delta. */
   panBy(de, dn) {
     if (!this.bounds) return;
+    this.isOverview = false;
     const b = this.bounds;
     this.bounds = {
       minE: b.minE + de, maxE: b.maxE + de,

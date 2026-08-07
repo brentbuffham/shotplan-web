@@ -172,8 +172,19 @@ export function drawPlan(s, plan, opts = {}) {
     collarsOnly: false, ...opts,
   };
 
-  // White frame on the cyan desktop, black plotting surface inside.
-  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  // The frame states what mode the view is in, and v3.0 uses two distinct
+  // treatments: a solid white frame on a cyan desktop for Overview, and a
+  // dashed frame on blue once you are zoomed in. Both the frame style and the
+  // desktop colour change, so the mode is readable at a glance.
+  const overview = opts.isOverview !== false;
+  s.fillRect(FRAME.x0 - 8, FRAME.y0 - 8, FRAME.x1 + 8, FRAME.y1 + 8,
+             overview ? CYAN : BLUE);
+  if (overview) {
+    s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  } else {
+    dashedRect(s, FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+    dashedRect(s, FRAME.x0 + 1, FRAME.y0 + 1, FRAME.x1 - 1, FRAME.y1 - 1, WHITE);
+  }
   s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
   if (!plan) return;
 
@@ -296,13 +307,16 @@ function arrowHead(s, ax, ay, bx, by, c) {
   const len = Math.hypot(dx, dy);
   if (len < 10) return;
   const ux = dx / len, uy = dy / len;
-  const px = ax + dx * 0.6, py = ay + dy * 0.6;
   const size = 4;
-  // Two barbs swept back from the tip.
-  for (const sgn of [1, -1]) {
-    const nx = -uy * sgn, ny = ux * sgn;
-    s.line(px, py, Math.round(px - ux * size + nx * size * 0.6),
-           Math.round(py - uy * size + ny * size * 0.6), c);
+  // v3.0 draws a run of chevrons along the tie rather than one arrowhead,
+  // which reads as direction even where lines cross.
+  for (const at of (len > 26 ? [0.42, 0.58] : [0.5])) {
+    const px = Math.round(ax + dx * at), py = Math.round(ay + dy * at);
+    for (const sgn of [1, -1]) {
+      const nx = -uy * sgn, ny = ux * sgn;
+      s.line(px, py, Math.round(px - ux * size + nx * size * 0.7),
+             Math.round(py - uy * size + ny * size * 0.7), c);
+    }
   }
 }
 
@@ -318,7 +332,7 @@ function dashedRect(s, x0, y0, x1, y1, c) {
 
 /** Draw the whole screen. */
 export function drawScreen(s, plan, filename, opts) {
-  s.clear(CYAN);
+  s.clear(opts?.isOverview !== false ? CYAN : BLUE);
   drawMenuBar(s, opts?.activeMenu ?? -1);
   drawDetonatorBar(s, plan);
   drawPlan(s, plan, opts);
