@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -20,6 +20,20 @@ function load(plan, name) {
 }
 
 function render() {
+  if (shell.contour) {
+    const { step } = drawContours(screen, shell.plan, shell.contour.field, {
+      transform: shell.view.transform(),
+      isOverview: shell.view.isOverview,
+      mode: shell.contour.mode,
+    });
+    if (step) shell.contour.step = step;
+    drawMenuBar(screen, shell.openMenu);
+    drawDetonatorBar(screen, shell.plan);
+    drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
+    drawMenus(screen, shell);
+    display.present();
+    return;
+  }
   if (shell.overlap) {
     drawOverlap(screen, shell.plan, shell.overlap.result, {
       transform: shell.view.transform(),

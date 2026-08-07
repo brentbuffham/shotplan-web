@@ -17,6 +17,7 @@ import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
 import { overlapProbabilities } from '../calc/overlap.js';
+import { timeField } from '../calc/contour.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
@@ -67,6 +68,7 @@ export class Shell {
     this.vis = null;         // running Visualization, if any
     this.envelope = null;    // {mode: 'Display'|'Explore'} when showing it
     this.overlap = null;     // {metric, result} when showing Overlap
+    this.contour = null;     // {mode, field, step} when showing contours
   }
 
   /**
@@ -137,6 +139,35 @@ export class Shell {
     this.close();
   }
 
+  /**
+   * Calculations > Angle of initiation > Contours | First Movement
+   *
+   * Both read the MEAN firing-time field, not the nominal one - v3.0 captions
+   * the plot "Contours of mean hole firing times".
+   */
+  startContours(mode) {
+    if (!this.times) {
+      this.status = 'Error: This calculation requires an up-to-date database.';
+      this.close();
+      return;
+    }
+    const times = computeTimes(this.plan, this.delayDb, { mode: 'mean' });
+    const field = timeField(this.plan, times);
+    if (field.holes.length < 3) {
+      this.status = 'Excuse me!  There are no holes firing in this plan.';
+      this.close();
+      return;
+    }
+    this.contour = { mode, field, step: 0 };
+    this.status = '';
+    this.close();
+  }
+
+  stopContours() {
+    this.contour = null;
+    this.onChange();
+  }
+
   stopOverlap() {
     this.overlap = null;
     this.onChange();
@@ -175,11 +206,18 @@ export class Shell {
     this.vis = null;
     this.envelope = null;
     this.overlap = null;
+    this.contour = null;
     this.recompute();
   }
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.contour) {
+      // Both captions verbatim from SHOTPLAN.OVR (0x18037, 0x15D54).
+      return this.contour.mode === 'First Movement'
+        ? 'Arrows show direction of first movement based on timing contours.'
+        : `Contours of mean hole firing times are shown in steps of ${this.contour.step} ms`;
+    }
     if (this.overlap) {
       // Both captions are verbatim from SHOTPLAN.OVR @0xBB5A.
       return this.overlap.metric === 'reversal'
@@ -390,6 +428,7 @@ export class Shell {
    * "Right/Del button expand/contract" means.
    */
   rightClick(px, py) {
+    if (this.contour) { this.stopContours(); return; }
     if (this.overlap) { this.stopOverlap(); return; }
     if (this.envelope) { this.stopEnvelope(); return; }
     if (this.drag) { this.drag = null; this.onChange(); return; }
@@ -421,6 +460,7 @@ export class Shell {
   }
 
   key(k) {
+    if (this.contour && k === 'Escape') { this.stopContours(); return; }
     if (this.overlap && k === 'Escape') { this.stopOverlap(); return; }
     if (this.envelope && k === 'Escape') { this.stopEnvelope(); return; }
     if (this.vis) {
@@ -478,6 +518,10 @@ export class Shell {
       return;
     }
     if (item.label === 'Out of sequence') { this.startOverlap('reversal'); return; }
+    if (item.label === 'Contours' || item.label === 'First Movement') {
+      this.startContours(item.label);
+      return;
+    }
     if (item.label === 'Crowding 80%') { this.startOverlap('crowding'); return; }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.
     switch (item.label) {

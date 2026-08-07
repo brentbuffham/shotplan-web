@@ -14,6 +14,7 @@ import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
 import { histogram, envelopeSummary, holesInSlice } from '../calc/envelope.js';
 import { BANDS, bandOf } from '../calc/overlap.js';
+import { contours, firstMovement } from '../calc/contour.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -540,6 +541,95 @@ export function drawOverlap(s, plan, result, opts = {}) {
     s.hline(lx + 5, lx + 22, y + 7, BAND_COLOURS[i]);
     s.text(b.label, lx + 26, y, WHITE);
   });
+}
+
+/** Dotted polyline, as v3.0 draws contours. */
+function dottedPath(s, pts, colour, every = 3) {
+  let n = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const x0 = pts[i].x, y0 = pts[i].y, x1 = pts[i + 1].x, y1 = pts[i + 1].y;
+    const steps = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+    for (let k = 0; k <= steps; k++) {
+      if (n++ % every === 0) {
+        s.px(Math.round(x0 + ((x1 - x0) * k) / steps),
+             Math.round(y0 + ((y1 - y0) * k) / steps), colour);
+      }
+    }
+  }
+}
+
+/**
+ * Angle of initiation > Contours, and > First Movement.
+ *
+ * Both draw the same field. Contours are dotted yellow with the level written
+ * at each end of every polyline; first movement is one arrow per hole pointing
+ * down-gradient.
+ */
+export function drawContours(s, plan, field, opts = {}) {
+  const t = opts.transform ?? fitTransform(planBounds(plan));
+  const overview = opts.isOverview !== false;
+  s.clear(overview ? CYAN : BLUE);
+  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
+  if (!plan || !t || !field) return { step: 0 };
+
+  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
+
+  for (const bench of plan.benches) {
+    for (const pts of [bench.crest, bench.foot]) {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i], b = pts[i + 1];
+        if (a.e === null || b.e === null) continue;
+        s.line(t.x(a.e), t.y(a.n), t.x(b.e), t.y(b.n), GREEN);
+      }
+    }
+  }
+
+  const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  for (const h of field.holes) {
+    const x = t.x(h.e), y = t.y(h.n);
+    s.fillCircle(x, y, r, BLACK);
+    s.circle(x, y, r, WHITE);
+  }
+
+  let step = 0;
+  if (opts.mode === 'First Movement') {
+    const dirs = firstMovement(field);
+    // Arrow length in pixels, clamped so dense patterns stay legible.
+    const L = Math.max(6, Math.min(16, Math.round(t.scale * 1.6)));
+    dirs.forEach((d, i) => {
+      if (!d) return;
+      const h = field.holes[i];
+      // Screen y is inverted relative to northing.
+      const cx = t.x(h.e), cy = t.y(h.n);
+      const ex = Math.round(cx + d.x * L), ey = Math.round(cy - d.y * L);
+      s.line(cx, cy, ex, ey, YELLOW);
+      // Barbs.
+      const ux = (ex - cx) / L, uy = (ey - cy) / L;
+      for (const sg of [1, -1]) {
+        s.line(ex, ey, Math.round(ex - ux * 5 - uy * 4 * sg),
+               Math.round(ey - uy * 5 + ux * 4 * sg), YELLOW);
+      }
+    });
+  } else {
+    const c = contours(field, opts.step);
+    step = c.step;
+    for (const { level, lines } of c.levels) {
+      for (const line of lines) {
+        const px = line.map((p) => ({ x: t.x(p.x), y: t.y(p.y) }));
+        dottedPath(s, px, YELLOW);
+        // Label both ends, as v3.0 does.
+        const lbl = String(Math.round(level));
+        for (const end of [px[0], px[px.length - 1]]) {
+          s.text(lbl, end.x - lbl.length * 4, end.y - 8, YELLOW);
+        }
+      }
+    }
+  }
+
+  drawScaleBar(s, t);
+  s.resetClip();
+  return { step };
 }
 
 /** Marching-ant style rectangle for the zoom window. */
