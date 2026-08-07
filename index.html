@@ -2,47 +2,180 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SHOTPlan v3.0 — web rebuild</title>
+<meta name="description" content="A faithful web rebuild of SHOTPlan v3.0, the 1993 DOS blast design and initiation-timing package.">
 <style>
+  :root {
+    --ink: #d8d8dc;
+    --dim: #8a8a93;
+    --line: #2a2a33;
+    --bg: #101014;
+    --accent: #55ff55;
+  }
   html, body {
     margin: 0;
-    height: 100%;
-    background: #101014;
-    color: #aaa;
-    font: 13px/1.5 ui-monospace, Consolas, monospace;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 ui-monospace, Consolas, "DejaVu Sans Mono", monospace;
   }
-  /* Integer scaling only. Anything else resamples the pixel grid. */
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  header h1 { font-size: 20px; margin: 0 0 2px; letter-spacing: .02em; }
+  header .sub { color: var(--dim); margin: 0 0 16px; font-size: 13px; }
+
+  .why {
+    border-left: 3px solid var(--accent);
+    padding: 8px 0 8px 14px;
+    margin: 0 0 18px;
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .why b { color: var(--accent); font-weight: 600; }
+
+  /* progress ------------------------------------------------------------ */
+  .prog { border: 1px solid var(--line); padding: 12px 14px; margin-bottom: 18px; }
+  .prog h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--dim); margin: 0 0 10px; font-weight: 600;
+  }
+  .row { display: grid; grid-template-columns: 110px 1fr 84px; gap: 10px; align-items: center; margin: 4px 0; }
+  .row .name { color: var(--dim); font-size: 12.5px; }
+  .bar { height: 9px; background: #1c1c24; border: 1px solid var(--line); position: relative; }
+  .bar i { display: block; height: 100%; background: var(--accent); opacity: .85; }
+  .bar.part i { background: #ffd24a; }
+  .bar.none i { background: #4a4a55; }
+  .row .num { font-size: 12px; color: var(--dim); text-align: right; }
+  .total { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .total .name, .total .num { color: var(--ink); font-weight: 600; }
+
+  /* canvas -------------------------------------------------------------- */
+  /*
+   * The canvas must keep EXACT pixel dimensions. A max-width would clamp the
+   * width while the height stayed put, stretching the image and destroying the
+   * one property this rebuild exists for. So the stage breaks out of the text
+   * column to full viewport width and scrolls if it must; pick 1x on a narrow
+   * screen rather than distorting the pixels.
+   */
+  .stage {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    margin: 22px 0 10px;
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    overflow-x: auto;
+  }
   canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     width: calc(640px * var(--scale, 1));
     height: calc(480px * var(--scale, 1));
+    flex: none;
     border: 1px solid #333;
     background: #000;
   }
-  #bar { display: flex; gap: 16px; align-items: center; }
-  #drop { color: #666; }
-  #drop.over { color: #6f6; }
-  button, select { font: inherit; background: #222; color: #ccc; border: 1px solid #444; padding: 2px 8px; }
+  #bar { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--dim); flex-wrap: wrap; justify-content: center; }
+  #drop.over { color: var(--accent); }
+  select { font: inherit; background: #1c1c24; color: var(--ink); border: 1px solid var(--line); padding: 2px 6px; }
+
+  /* footer -------------------------------------------------------------- */
+  footer { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; font-size: 12px; color: var(--dim); }
+  footer h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 6px; color: var(--dim); }
+  footer p { margin: 0 0 10px; }
+  footer a { color: #8ab4ff; }
+  details summary { cursor: pointer; color: var(--dim); }
+  details[open] summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
-  <canvas id="screen"></canvas>
-  <div id="bar">
-    <label>scale
-      <select id="scale">
-        <option value="1">1x</option>
-        <option value="2" selected>2x</option>
-        <option value="3">3x</option>
-      </select>
-    </label>
-    <span id="drop">drop a .XEL file here to load a plan</span>
+<div class="wrap">
+
+  <header>
+    <h1>SHOTPlan v3.0</h1>
+    <p class="sub">A faithful web rebuild of the 1993 DOS blast design and initiation-timing package.</p>
+  </header>
+
+  <p class="why">
+    <b>Why rebuild it.</b> SHOTPlan treated detonator timing as a
+    <b>distribution rather than a number</b>. Every delay carries a nominal, a
+    measured mean and a scatter, and the program runs the distribution. That is
+    what lets it answer <i>"what is the probability these two adjacent holes
+    fire out of sequence?"</i> — a question that matters on a real bench, and
+    one a deterministic tool cannot answer at all. A good deal of what replaced
+    it stopped asking.
+  </p>
+
+  <section class="prog">
+    <h2>Rebuild progress — original menu items implemented</h2>
+    <div class="row"><span class="name">Show</span><span class="bar"><i style="width:100%"></i></span><span class="num">12 / 12</span></div>
+    <div class="row"><span class="name">Calculations</span><span class="bar"><i style="width:86%"></i></span><span class="num">6 / 7</span></div>
+    <div class="row"><span class="name">Files</span><span class="bar part"><i style="width:42%"></i></span><span class="num">2.5 / 6</span></div>
+    <div class="row"><span class="name">Edit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 8</span></div>
+    <div class="row"><span class="name">Print / Plot</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
+    <div class="row"><span class="name">Options</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
+    <div class="row"><span class="name">Quit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 1</span></div>
+    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:49%"></i></span><span class="num">20.5 / 42</span></div>
+  </section>
+
+  <div class="stage">
+    <canvas id="screen"></canvas>
+    <div id="bar">
+      <label>scale
+        <select id="scale">
+          <option value="1">1x</option>
+          <option value="2" selected>2x</option>
+          <option value="3">3x</option>
+        </select>
+      </label>
+      <span id="drop">drop a .XEL file here to load a plan</span>
+    </div>
   </div>
-  <script type="module" src="./src/main.js"></script>
+
+  <footer>
+    <details>
+      <summary>What works, and what the numbers above mean</summary>
+      <p>
+        Counting is by original menu item, which undercounts the hard parts —
+        the seven calculations were most of the work but are seven of
+        forty-two lines. Working: plan loading and saving, navigation,
+        every display toggle, Visualize, Time Envelope, Overlap probabilities,
+        timing contours, first movement, burden relief and quantities.
+        Not built: the whole Edit mode, printing and plotting, the options
+        screens, and Misfires — which needs a reliability database that is
+        still undecoded.
+      </p>
+      <p>
+        Ships with a demonstration pattern and a synthetic product database.
+        Drop any <code>.XEL</code> file on the page to load a real plan; it is
+        read entirely in your browser and nothing is uploaded.
+      </p>
+    </details>
+
+    <h3>Legal</h3>
+    <p>
+      SHOTPlan was written by <b>M. A. Irving</b> for <b>IES Pty Ltd</b> and
+      distributed by <b>ICI Explosives</b>, copyright 1993. ICI Explosives was
+      sold to Orica in 1998; ICI was absorbed by AkzoNobel in 2008; IES Pty Ltd
+      no longer trades. None of that caused the copyright to lapse.
+    </p>
+    <p>
+      This is a clean-room reimplementation of the program's
+      <i>functionality and interface conventions</i>, built from documented
+      facts about observed behaviour and file layout. It contains no code,
+      assets or data from the original, and is not affiliated with or endorsed
+      by any of the parties above.
+    </p>
+    <p>
+      Provided as-is for historical and educational interest.
+      <b>It is not certified for operational blast design.</b> Verify any result
+      against your own procedures before it goes near a bench.
+    </p>
+    <p>
+      Source: <a href="https://github.com/brentbuffham/shotplan-web">github.com/brentbuffham/shotplan-web</a>
+      · part of <a href="https://blastingapps.com">blastingapps.com</a>
+    </p>
+  </footer>
+
+</div>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
