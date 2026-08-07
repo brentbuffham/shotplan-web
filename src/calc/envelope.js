@@ -19,8 +19,15 @@
  *            "<n> ms time slice at <t> ms overlaps <h> holes"
  */
 
-/** Window width in ms, as the original's "ms window" figure. */
-export const DEFAULT_WINDOW = 8;
+/**
+ * Window width in ms.
+ *
+ * This is NOT a constant of the calculation - it is a user setting, shown on
+ * v3.0's Options > Program screen as "Vib. Envelope(ms)" and shipped at 1.
+ * Assuming 8 collapsed adjacent holes into shared bins and made the histogram
+ * disagree with the original's for reasons that looked like a timing bug.
+ */
+export const DEFAULT_WINDOW = 1;
 
 /**
  * Bin firing times into fixed windows.
