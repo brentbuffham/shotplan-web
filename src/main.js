@@ -3,6 +3,7 @@ import { drawScreen } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
+import { recoverKey, parseDelays } from './format/delays.js';
 
 const canvas = document.getElementById('screen');
 const screen = new Screen();
@@ -27,6 +28,7 @@ function render() {
     highlight: shell.highlight,
     rubber: shell.drag,
     isOverview: shell.view.isOverview,
+    visualization: shell.vis,
   });
   drawMenus(screen, shell);
   display.present();
@@ -52,6 +54,20 @@ function decodeXel(buf) {
  * is what anyone cloning this repository will see.
  */
 async function boot() {
+  // The delay database is what makes Calculations possible at all. It is a
+  // third party's data, so it lives only in the gitignored samples/ folder;
+  // without it the app still loads plans and simply refuses to calculate,
+  // which is what the original does with a stale database.
+  try {
+    const [pRes, dRes] = await Promise.all([
+      fetch('/samples/PRODUCTS.BIN'), fetch('/samples/DELAYS.BIN'),
+    ]);
+    if (pRes.ok && dRes.ok) {
+      const key = recoverKey(new Uint8Array(await pRes.arrayBuffer()));
+      shell.delayDb = parseDelays(new Uint8Array(await dRes.arrayBuffer()), key);
+    }
+  } catch { /* no local database; Calculations will report it */ }
+
   try {
     const res = await fetch('/samples/TEST3.XEL');
     if (res.ok) {
@@ -95,3 +111,14 @@ document.addEventListener('drop', async (e) => {
 });
 
 boot();
+
+// --- animation loop: only runs while Visualize is active ---
+let last = 0;
+function frame(now) {
+  if (shell.vis) {
+    if (shell.vis.tick(now - (last || now))) render();
+  }
+  last = now;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);

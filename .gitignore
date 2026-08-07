@@ -9,3 +9,6 @@ dist/
 # Font pack is redistributable but bulky; extract-font.js regenerates
 # src/render/font-data.js from it. Keep the pack out of the repo.
 font/
+
+# Product database is a third party's data; keep it local only
+*.BIN

@@ -15,6 +15,8 @@ import { WIDTH, BLUE, CYAN, WHITE, YELLOW, BLACK, LIGHTGREY } from '../render/sc
 import { PLOT } from '../render/view.js';
 import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
+import { computeTimes } from '../calc/timing.js';
+import { Visualization, VISUALIZE_PROMPT } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
 const ZOOM_PROMPT =
@@ -57,6 +59,43 @@ export class Shell {
     this.pan = null;         // {px,py} while right-dragging
     this.highlight = null;   // hole under the cursor
     this.readout = '';       // cursor position / hole data
+
+    // --- calculations ---
+    this.delayDb = null;     // parsed DELAYS.BIN, or null
+    this.times = null;       // computeTimes() result for the loaded plan
+    this.vis = null;         // running Visualization, if any
+  }
+
+  /**
+   * Recompute firing times. Without a delay database there is nothing to
+   * compute from, which is the condition the original reports as
+   * "Error: This calculation requires an up-to-date database."
+   */
+  recompute() {
+    this.times = (this.plan && this.delayDb)
+      ? computeTimes(this.plan, this.delayDb, { mode: 'nominal' })
+      : null;
+  }
+
+  startVisualize() {
+    if (!this.times) {
+      this.status = 'Error: This calculation requires an up-to-date database.';
+      this.close();
+      return;
+    }
+    if (!this.times.order.length) {
+      this.status = 'Excuse me! You dont have any holes firing on this plan!';
+      this.close();
+      return;
+    }
+    this.vis = new Visualization(this.times);
+    this.status = '';
+    this.close();
+  }
+
+  stopVisualize() {
+    this.vis = null;
+    this.onChange();
   }
 
   /**
@@ -79,10 +118,17 @@ export class Shell {
       this.toggles.boundary = plan.boundary.length > 0;
       this.toggles.texts = plan.texts.length > 0;
     }
+    this.vis = null;
+    this.recompute();
   }
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.vis) {
+      return this.vis.done
+        ? `Blast duration ${Math.round(this.times.duration)} ms   ${this.times.order.length} holes fired   FINISH`
+        : VISUALIZE_PROMPT;
+    }
     if (this.status) return this.status;
     if (this.zoomMode || this.drag) return ZOOM_PROMPT;
     return this.readout;
@@ -299,6 +345,10 @@ export class Shell {
   }
 
   key(k) {
+    if (this.vis) {
+      if (k === 'Escape') { this.stopVisualize(); return; }
+      if (k === ' ') { this.vis.togglePause(); this.onChange(); return; }
+    }
     if (k === 'Escape') { this.rightClick(); return; }
     const cols = menuColumns();
     const upper = k.toUpperCase();
@@ -323,6 +373,10 @@ export class Shell {
     if (item.label === 'Collars only shown') {
       this.toggles.collarsOnly = !this.toggles.collarsOnly;
       this.onChange();
+      return;
+    }
+    if (item.label === 'Visualize' || item.label === 'Display') {
+      this.startVisualize();
       return;
     }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.

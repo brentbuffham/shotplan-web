@@ -8,7 +8,7 @@
  */
 import {
   WIDTH, HEIGHT, BLACK, BLUE, CYAN, WHITE, YELLOW, LIGHTGREEN, LIGHTCYAN,
-  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN,
+  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 
@@ -249,11 +249,16 @@ export function drawPlan(s, plan, opts = {}) {
     s.line(x - r, y - r, x + r, y + r, WHITE);
     s.line(x - r, y + r, x + r, y - r, WHITE);
   }
+  const vis = opts.visualization;
   for (const h of liveHoles(plan)) {
     if (h.e === null) continue;
     const x = t.x(h.e), y = t.y(h.n);
-    s.fillCircle(x, y, r, BLACK);
-    s.circle(x, y, r, WHITE);
+    if (vis && vis.hasFired(h.index + 1)) {
+      burst(s, x, y, r, vis.sinceFired(h.index + 1));
+    } else {
+      s.fillCircle(x, y, r, BLACK);
+      s.circle(x, y, r, WHITE);
+    }
   }
 
   // --- initiation point ---
@@ -293,6 +298,12 @@ export function drawPlan(s, plan, opts = {}) {
     dashedRect(s, Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1), YELLOW);
   }
 
+  // Elapsed-time counter, top right, as v3.0 shows during Visualize.
+  if (opts.visualization) {
+    const label = `${Math.round(opts.visualization.t)}ms`;
+    s.text(label, PLOT.x1 - label.length * 8 - 6, PLOT.y0 + 6, YELLOW);
+  }
+
   drawScaleBar(s, t);
   s.resetClip();
 }
@@ -318,6 +329,23 @@ function arrowHead(s, ax, ay, bx, by, c) {
              Math.round(py - uy * size + ny * size * 0.7), c);
     }
   }
+}
+
+/**
+ * A detonated hole. v3.0 replaces the collar circle with a burst that stays
+ * lit for the rest of the run, so the fired region reads as a growing front.
+ * The burst flares briefly white then settles to yellow/red.
+ */
+function burst(s, x, y, r, age) {
+  const fresh = age !== null && age < 25;
+  const arms = 8;
+  const len = fresh ? r + 5 : r + 3;
+  for (let i = 0; i < arms; i++) {
+    const a = (i / arms) * Math.PI * 2;
+    const c = fresh ? WHITE : (i % 2 ? RED : YELLOW);
+    s.line(x, y, Math.round(x + Math.cos(a) * len), Math.round(y + Math.sin(a) * len), c);
+  }
+  s.fillCircle(x, y, Math.max(1, r - 1), fresh ? WHITE : YELLOW);
 }
 
 /** Marching-ant style rectangle for the zoom window. */
