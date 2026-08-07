@@ -114,7 +114,7 @@ async function boot() {
   // which is what the original does with a stale database.
   try {
     const [pRes, dRes] = await Promise.all([
-      fetch('/samples/PRODUCTS.BIN'), fetch('/samples/DELAYS.BIN'),
+      fetch('./samples/PRODUCTS.BIN'), fetch('./samples/DELAYS.BIN'),
     ]);
     if (pRes.ok && dRes.ok) {
       const key = recoverKey(new Uint8Array(await pRes.arrayBuffer()));
@@ -127,7 +127,7 @@ async function boot() {
     // to exercise a calculation against a production pattern rather than the
     // small test one.
     const want = new URLSearchParams(location.search).get('plan') ?? 'TEST4.XEL';
-    const res = await fetch('/samples/' + want);
+    const res = await fetch('./samples/' + want);
     if (res.ok) {
       const buf = new Uint8Array(await res.arrayBuffer());
       load(parseXel(decodeXel(buf)), want.toUpperCase());

@@ -215,7 +215,7 @@ export function parseXel(text) {
       bLink: int(f[6]),
       angle: num(f[7]),
       depth: num(f[8]),
-      unknown9: num(f[9]),
+      dip: num(f[9]),        // radians from vertical; 0 = vertical hole
       bearing: num(f[10]), // radians
       delay: int(f[11]),   // in-hole delay number
       unknown12: int(f[12]),

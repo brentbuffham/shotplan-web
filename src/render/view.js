@@ -287,25 +287,47 @@ export function drawPlan(s, plan, opts = {}) {
   }
 
   // --- hole tracks ---
-  // The trace from collar to toe.
+  // The plan projection of the borehole, drawn as a dotted RECTANGLE - the
+  // hole has width, and at the zoom where tracks are worth looking at that
+  // width is visible.
   //
-  // `angle` is inclination where 90 is vertical, so a hole at 102 leans 12
-  // degrees past vertical along its bearing and the horizontal run is
-  // depth * sin(angle - 90). Using cos(angle) gives the right magnitude but
-  // the wrong sign, putting the toe behind the collar - TEST4's holes are at
-  // 102 degrees bearing east, and v3.0 draws their tracks running east.
+  // Geometry comes from `dip` and `bearing`, both radians: horizontal run is
+  // depth * sin(dip). TEST4's holes dip 0.2618 rad - exactly 15 degrees - on a
+  // bearing of 90, giving a 3.11 m run east for a 12 m hole, which is what
+  // v3.0 draws. The `angle` field (102 degrees here) is NOT this angle;
+  // deriving the run from it gives 2.49 m.
   //
-  // At the 89 degrees most patterns use the run is a few centimetres, which is
-  // why the original only shows this when asked.
+  // A vertical hole has dip 0 and so no track at all, which is why TEST3 shows
+  // none.
   if (show.holeTracks) {
+    // Width is the hole diameter, which has not been located in the format
+    // yet, so a nominal 0.2 m is used with a 3 px floor so the rectangle stays
+    // legible when zoomed out.
+    const NOMINAL_DIAMETER = 0.2;
+    const halfW = Math.max(1.5, (NOMINAL_DIAMETER * t.scale) / 2);
     for (const h of liveHoles(plan)) {
       if (h.e === null || !h.depth) continue;
-      const run = h.depth * Math.sin(((h.angle - 90) * Math.PI) / 180);
+      const run = h.depth * Math.sin(h.dip || 0);
       const te = h.e + run * Math.sin(h.bearing);
       const tn = h.n + run * Math.cos(h.bearing);
-      // Dotted, as v3.0 draws them - a solid line reads as a tie.
-      dottedPath(s, [{ x: t.x(h.e), y: t.y(h.n) }, { x: t.x(te), y: t.y(tn) }],
-                 LIGHTGREY, 2);
+      const x0 = t.x(h.e), y0 = t.y(h.n), x1 = t.x(te), y1 = t.y(tn);
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      if (len < 2) {
+        // A vertical hole has no run, so there is no rectangle to draw. v3.0
+        // still marks it: a short line straight through the collar, showing
+        // the hole is present and tracked but going nowhere in plan.
+        const m = Math.max(3, Math.round(halfW * 2));
+        s.line(x0 - m, y0, x0 + m, y0, LIGHTGREY);
+        continue;
+      }
+      const px = (-(y1 - y0) / len) * halfW;
+      const py = ((x1 - x0) / len) * halfW;
+      const c = [
+        { x: x0 + px, y: y0 + py }, { x: x1 + px, y: y1 + py },
+        { x: x1 - px, y: y1 - py }, { x: x0 - px, y: y0 - py },
+      ];
+      // Dotted outline, closed - solid would read as a tie.
+      dottedPath(s, [...c, c[0]], LIGHTGREY, 2);
     }
   }
 
