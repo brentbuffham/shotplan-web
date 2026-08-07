@@ -64,6 +64,7 @@ export class Shell {
     this.delayDb = null;     // parsed DELAYS.BIN, or null
     this.times = null;       // computeTimes() result for the loaded plan
     this.vis = null;         // running Visualization, if any
+    this.envelope = null;    // {mode: 'Display'|'Explore'} when showing it
   }
 
   /**
@@ -93,6 +94,28 @@ export class Shell {
     this.close();
   }
 
+  /** Calculations > Time Envelope > Display|Explore */
+  startEnvelope(mode) {
+    if (!this.times) {
+      this.status = 'Error: This calculation requires an up-to-date database.';
+      this.close();
+      return;
+    }
+    if (!this.times.fire.size) {
+      this.status = 'Excuse me! You dont have any holes firing on this plan!';
+      this.close();
+      return;
+    }
+    this.envelope = { mode };
+    this.status = '';
+    this.close();
+  }
+
+  stopEnvelope() {
+    this.envelope = null;
+    this.onChange();
+  }
+
   stopVisualize() {
     this.vis = null;
     this.onChange();
@@ -119,11 +142,17 @@ export class Shell {
       this.toggles.texts = plan.texts.length > 0;
     }
     this.vis = null;
+    this.envelope = null;
     this.recompute();
   }
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.envelope) {
+      return this.envelope.mode === 'Explore'
+        ? 'Use cursor and Left/INS button to select display range from vertical bar graph'
+        : 'Time envelope calculation      Right/DEL or ESC to exit';
+    }
     if (this.vis) {
       return this.vis.done
         ? `Blast duration ${Math.round(this.times.duration)} ms   ${this.times.order.length} holes fired   FINISH`
@@ -225,6 +254,13 @@ export class Shell {
 
   mouseMove(px, py) {
     let changed = false;
+    if (this.envelope) {
+      if (this.envelope.mode === 'Explore' && this.envelope.cursorX !== px) {
+        this.envelope.cursorX = px;
+        this.onChange();
+      }
+      if (this.openMenu < 0) return;
+    }
     if (this.openMenu < 0 && this.plotMove(px, py)) changed = true;
     if (this.openMenu >= 0) {
       const sub = this.submenuBox();
@@ -316,6 +352,7 @@ export class Shell {
    * "Right/Del button expand/contract" means.
    */
   rightClick(px, py) {
+    if (this.envelope) { this.stopEnvelope(); return; }
     if (this.drag) { this.drag = null; this.onChange(); return; }
     if (this.openSub >= 0) {
       this.openSub = -1;
@@ -345,6 +382,7 @@ export class Shell {
   }
 
   key(k) {
+    if (this.envelope && k === 'Escape') { this.stopEnvelope(); return; }
     if (this.vis) {
       if (k === 'Escape') { this.stopVisualize(); return; }
       if (k === ' ') { this.vis.togglePause(); this.onChange(); return; }
@@ -393,6 +431,10 @@ export class Shell {
     }
     if (menuLabel === 'Calculations' && SPEEDS[item.label] !== undefined) {
       this.startVisualize(item.label);
+      return;
+    }
+    if (menuLabel === 'Calculations' && (item.label === 'Display' || item.label === 'Explore')) {
+      this.startEnvelope(item.label);
       return;
     }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.

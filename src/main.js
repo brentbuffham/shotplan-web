@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen } from './render/view.js';
+import { drawScreen, drawEnvelope, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -20,6 +20,18 @@ function load(plan, name) {
 }
 
 function render() {
+  // Time Envelope replaces the plan view entirely, as it does in v3.0.
+  if (shell.envelope) {
+    drawEnvelope(screen, shell.times, {
+      cursorX: shell.envelope.mode === 'Explore' ? shell.envelope.cursorX : undefined,
+    });
+    drawMenuBar(screen, shell.openMenu);
+    drawDetonatorBar(screen, shell.plan);
+    drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
+    drawMenus(screen, shell);
+    display.present();
+    return;
+  }
   drawScreen(screen, shell.plan, filename, {
     ...shell.toggles,
     activeMenu: shell.openMenu,

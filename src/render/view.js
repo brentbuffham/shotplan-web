@@ -12,6 +12,7 @@ import {
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
+import { histogram, envelopeSummary, holesInSlice } from '../calc/envelope.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -374,6 +375,87 @@ function leadInMarker(s, x, yTop, label) {
   }
   s.fillRect(x - w, yTop + roof, x + w, yTop + roof + body, MAGENTA);
   s.text(label, x - 3, yTop + roof + 1, WHITE, MAGENTA);
+}
+
+/**
+ * Time Envelope: a bar graph of holes per window across the blast, with the
+ * summary figures the original prints beside it.
+ *
+ * Bars are drawn from the baseline up, one pixel column per bin where they
+ * fit, widening only when the plan is short enough to allow it — the original
+ * calls it a "vertical bar graph" and a 200-hole plan spanning 2800 ms has to
+ * fit the same box a 25-hole plan does.
+ */
+export function drawEnvelope(s, times, opts = {}) {
+  const window = opts.window ?? 8;
+  const h = histogram(times, window);
+  const sum = envelopeSummary(times, window);
+
+  // Clear the whole desktop first. Without this, the menu that launched the
+  // calculation stays painted in the strip above the frame.
+  s.clear(CYAN);
+  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
+  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
+
+  const left = PLOT.x0 + 56;         // room for the count axis
+  const right = PLOT.x1 - 12;
+  const base = PLOT.y1 - 44;         // room for the time axis and caption
+  const top = PLOT.y0 + 56;          // room for the summary block
+  const gw = right - left;
+  const gh = base - top;
+
+  // Axes.
+  s.hline(left - 1, right, base + 1, LIGHTGREY);
+  s.vline(left - 1, top, base + 1, LIGHTGREY);
+  s.text('Holes', PLOT.x0 + 4, top - 18, LIGHTGREY);
+  s.text('(ms)', right - 36, base + 6, LIGHTGREY);
+
+  // Bars.
+  const n = h.bins.length;
+  const bw = Math.max(1, Math.floor(gw / n));
+  const scale = h.peak ? gh / h.peak : 0;
+  for (let i = 0; i < n; i++) {
+    if (!h.bins[i]) continue;
+    const x = left + Math.floor((i * gw) / n);
+    const bh = Math.max(1, Math.round(h.bins[i] * scale));
+    const colour = h.bins[i] >= sum.maxOverlap ? LIGHTRED : YELLOW;
+    s.fillRect(x, base - bh, Math.min(right, x + bw - 1), base, colour);
+  }
+
+  // Count axis labels: 0 and the peak.
+  s.text(String(h.peak), left - 8 - String(h.peak).length * 8, top - 4, LIGHTGREY);
+  s.text('0', left - 16, base - 12, LIGHTGREY);
+
+  // Time axis labels: first and last.
+  const t0 = `${Math.round(times.first)}`;
+  const t1 = `${Math.round(times.last)}`;
+  s.text(t0, left, base + 6, LIGHTGREY);
+  s.text(t1, right - 40 - t1.length * 8, base + 6, LIGHTGREY);
+
+  // Summary block, in the original's wording, in two columns.
+  const C1 = PLOT.x0 + 8;
+  const C2 = PLOT.x0 + 8 + 37 * 8;
+  s.text(`Number Holes firing ${String(sum.firing).padStart(7)}`, C1, PLOT.y0 + 6, WHITE);
+  s.text(`Blast duration ${sum.duration.toFixed(1).padStart(9)} ms`, C1, PLOT.y0 + 24, WHITE);
+  s.text(`First hole fires at ${sum.first.toFixed(1).padStart(7)} ms`, C2, PLOT.y0 + 6, WHITE);
+  s.text(`Last  hole fires at ${sum.last.toFixed(1).padStart(7)} ms`, C2, PLOT.y0 + 24, WHITE);
+
+  // Explore cursor: a slice readout at the cursor position.
+  if (opts.cursorX !== undefined && opts.cursorX >= left && opts.cursorX <= right) {
+    const frac = (opts.cursorX - left) / gw;
+    const t = h.t0 + frac * (n * h.binMs);
+    const count = holesInSlice(times, t, window);
+    s.vline(opts.cursorX, top, base, LIGHTCYAN);
+    const label = `${window} ms time slice at ${Math.round(t)} ms overlaps ${count} holes`;
+    s.text(label, PLOT.x0 + 8, base + 26, LIGHTCYAN);
+  } else {
+    // Typo is the original's.
+    s.text(`Max ${sum.maxOverlap} holes overlap in any ${window} ms window`
+           + ` (at ${Math.round(sum.maxOverlapAt)} ms)`, PLOT.x0 + 8, base + 26, LIGHTGREY);
+  }
+
+  s.resetClip();
 }
 
 /** Marching-ant style rectangle for the zoom window. */
