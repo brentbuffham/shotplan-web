@@ -112,6 +112,14 @@ document.addEventListener('drop', async (e) => {
   if (!file) return;
   try {
     const buf = new Uint8Array(await file.arrayBuffer());
+    // Identify by content, not extension. A .CGM is a binary CGM metafile -
+    // a saved *plot*, not a plan - and it opens with BEGIN METAFILE (class 0,
+    // element 1). Handing it to the .XEL reader produces a confusing parse
+    // error about line numbers in what is not a text file.
+    if (buf[0] === 0x00 && buf[1] === 0x2e) {
+      drop.textContent = `${file.name} is a CGM plot, not a plan. Drop a .XEL instead.`;
+      return;
+    }
     const plan = parseXel(decodeXel(buf));
     load(plan, file.name.toUpperCase());
     drop.textContent = `${filename} — ${plan.holes.length} records, ${plan.links.length} ties`;
