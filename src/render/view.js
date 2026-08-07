@@ -391,71 +391,73 @@ export function drawEnvelope(s, times, opts = {}) {
   const h = histogram(times, window);
   const sum = envelopeSummary(times, window);
 
-  // Clear the whole desktop first. Without this, the menu that launched the
-  // calculation stays painted in the strip above the frame.
-  s.clear(CYAN);
-  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
-  s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
-  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
+  // v3.0 gives this calculation the whole screen on a BLUE field: no white
+  // frame, no black plot area, and no detonator bar. Only the menu bar and the
+  // status line survive. Measured from a capture of Time Envelope on TEST3.
+  s.clear(BLUE);
 
-  const left = PLOT.x0 + 56;         // room for the count axis
-  const right = PLOT.x1 - 12;
-  const base = PLOT.y1 - 44;         // room for the time axis and caption
-  const top = PLOT.y0 + 56;          // room for the summary block
+  const left = PLOT.x0 + 60;
+  const right = PLOT.x1 - 20;
+  const base = PLOT.y1 - 60;
+  const top = PLOT.y0 + 40;
   const gw = right - left;
   const gh = base - top;
 
-  // Axes.
-  s.hline(left - 1, right, base + 1, LIGHTGREY);
-  s.vline(left - 1, top, base + 1, LIGHTGREY);
-  s.text('Holes', PLOT.x0 + 4, top - 18, LIGHTGREY);
-  s.text('(ms)', right - 36, base + 6, LIGHTGREY);
+  // Axes in white.
+  s.hline(left, right, base, WHITE);
+  s.vline(left, top, base, WHITE);
 
-  // Bars.
-  const n = h.bins.length;
-  const bw = Math.max(1, Math.floor(gw / n));
-  const scale = h.peak ? gh / h.peak : 0;
-  for (let i = 0; i < n; i++) {
+  // Y axis: the original labels it 0 .. 1. in 0.2 steps, i.e. a real numeric
+  // axis rather than integer counts, and writes the label rotated up the side.
+  const peak = Math.max(1, h.peak);
+  const ticks = 5;
+  for (let i = 0; i <= ticks; i++) {
+    const v = (peak * i) / ticks;
+    const y = base - Math.round((gh * i) / ticks);
+    s.hline(left - 4, left, y, WHITE);
+    // Pascal prints reals with a trailing point when the fraction is zero.
+    const lbl = Number.isInteger(v) ? `${v}.` : v.toFixed(1);
+    s.text(lbl, left - 10 - lbl.length * 8, y - 7, WHITE);
+  }
+  s.textRot('Number Holes firing', PLOT.x0 + 6, base, WHITE);
+
+  // X axis: round tick steps across the blast.
+  const tMin = 0;
+  const tMax = Math.max(1, times.last);
+  const niceStep = [10, 20, 25, 50, 100, 200, 250, 500, 1000]
+    .find((st) => tMax / st <= 8) ?? 1000;
+  for (let t = tMin; t <= tMax + 1e-6; t += niceStep) {
+    const x = left + Math.round((t / tMax) * gw);
+    s.vline(x, base, base + 4, WHITE);
+    const lbl = t === 0 ? '0' : `${t}.`;
+    s.text(lbl, x - Math.floor((lbl.length * 8) / 2), base + 8, WHITE);
+  }
+  const xlab = 'Nominal in-hole firing time in milliseconds';
+  s.text(xlab, left + Math.round((gw - xlab.length * 8) / 2), base + 34, WHITE);
+
+  // Bars: thin yellow verticals from the baseline.
+  for (let i = 0; i < h.bins.length; i++) {
     if (!h.bins[i]) continue;
-    const x = left + Math.floor((i * gw) / n);
-    const bh = Math.max(1, Math.round(h.bins[i] * scale));
-    const colour = h.bins[i] >= sum.maxOverlap ? LIGHTRED : YELLOW;
-    s.fillRect(x, base - bh, Math.min(right, x + bw - 1), base, colour);
+    const t = h.t0 + i * h.binMs;
+    const x = left + Math.round((t / tMax) * gw);
+    const bh = Math.round((h.bins[i] / peak) * gh);
+    s.vline(x, base - bh, base - 1, YELLOW);
   }
 
-  // Count axis labels: 0 and the peak.
-  s.text(String(h.peak), left - 8 - String(h.peak).length * 8, top - 4, LIGHTGREY);
-  s.text('0', left - 16, base - 12, LIGHTGREY);
+  // Summary block, upper right, in the original's wording and order.
+  const C = right - 34 * 8;
+  s.text(`First hole fires at ${times.first.toFixed(1).padStart(7)} ms`, C, PLOT.y0 - 4, WHITE);
+  s.text(`Last  hole fires at ${times.last.toFixed(1).padStart(7)} ms`, C, PLOT.y0 + 12, WHITE);
+  s.text(`Blast duration      ${times.duration.toFixed(1).padStart(7)} ms`, C, PLOT.y0 + 28, WHITE);
 
-  // Time axis labels: first and last.
-  const t0 = `${Math.round(times.first)}`;
-  const t1 = `${Math.round(times.last)}`;
-  s.text(t0, left, base + 6, LIGHTGREY);
-  s.text(t1, right - 40 - t1.length * 8, base + 6, LIGHTGREY);
-
-  // Summary block, in the original's wording, in two columns.
-  const C1 = PLOT.x0 + 8;
-  const C2 = PLOT.x0 + 8 + 37 * 8;
-  s.text(`Number Holes firing ${String(sum.firing).padStart(7)}`, C1, PLOT.y0 + 6, WHITE);
-  s.text(`Blast duration ${sum.duration.toFixed(1).padStart(9)} ms`, C1, PLOT.y0 + 24, WHITE);
-  s.text(`First hole fires at ${sum.first.toFixed(1).padStart(7)} ms`, C2, PLOT.y0 + 6, WHITE);
-  s.text(`Last  hole fires at ${sum.last.toFixed(1).padStart(7)} ms`, C2, PLOT.y0 + 24, WHITE);
-
-  // Explore cursor: a slice readout at the cursor position.
+  // Explore: a cursor line and the slice readout under it.
   if (opts.cursorX !== undefined && opts.cursorX >= left && opts.cursorX <= right) {
-    const frac = (opts.cursorX - left) / gw;
-    const t = h.t0 + frac * (n * h.binMs);
+    const t = ((opts.cursorX - left) / gw) * tMax;
     const count = holesInSlice(times, t, window);
-    s.vline(opts.cursorX, top, base, LIGHTCYAN);
-    const label = `${window} ms time slice at ${Math.round(t)} ms overlaps ${count} holes`;
-    s.text(label, PLOT.x0 + 8, base + 26, LIGHTCYAN);
-  } else {
-    // Typo is the original's.
-    s.text(`Max ${sum.maxOverlap} holes overlap in any ${window} ms window`
-           + ` (at ${Math.round(sum.maxOverlapAt)} ms)`, PLOT.x0 + 8, base + 26, LIGHTGREY);
+    s.vline(opts.cursorX, top, base - 1, LIGHTCYAN);
+    s.text(`${window} ms time slice at ${Math.round(t)} ms overlaps ${count} holes`,
+           left, top - 20, LIGHTCYAN);
   }
-
-  s.resetClip();
 }
 
 /** Marching-ant style rectangle for the zoom window. */

@@ -26,7 +26,6 @@ function render() {
       cursorX: shell.envelope.mode === 'Explore' ? shell.envelope.cursorX : undefined,
     });
     drawMenuBar(screen, shell.openMenu);
-    drawDetonatorBar(screen, shell.plan);
     drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
     drawMenus(screen, shell);
     display.present();

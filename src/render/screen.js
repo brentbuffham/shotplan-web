@@ -174,6 +174,28 @@ export class Screen {
     }
   }
 
+  /**
+   * Draw a glyph rotated 90 degrees anticlockwise, for axis labels running up
+   * the side of a graph. DOS programs rotate the bitmap rather than using a
+   * separate font, so the glyph is simply transposed.
+   */
+  glyphRot(code, x, y, fg) {
+    const base = (code & 0xff) * GLYPH_HEIGHT;
+    for (let row = 0; row < GLYPH_HEIGHT; row++) {
+      const bits = FONT[base + row];
+      for (let col = 0; col < GLYPH_WIDTH; col++) {
+        if ((bits >> (7 - col)) & 1) this.px(x + row, y + (GLYPH_WIDTH - 1 - col), fg);
+      }
+    }
+  }
+
+  /** Draw a string running bottom-to-top, rotated 90 degrees anticlockwise. */
+  textRot(str, x, yBottom, fg) {
+    for (let i = 0; i < str.length; i++) {
+      this.glyphRot(str.charCodeAt(i), x, yBottom - (i + 1) * GLYPH_WIDTH, fg);
+    }
+  }
+
   /** Draw a string at character-cell position (80x30 grid). */
   textAt(str, col, row, fg, bg = -1) {
     this.text(str, col * GLYPH_WIDTH, row * GLYPH_HEIGHT, fg, bg);
