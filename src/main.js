@@ -4,6 +4,7 @@ import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
 import { recoverKey, parseDelays } from './format/delays.js';
+import { demoDelayDb } from './format/demo-delays.js';
 
 const canvas = document.getElementById('screen');
 const screen = new Screen();
@@ -120,7 +121,15 @@ async function boot() {
       const key = recoverKey(new Uint8Array(await pRes.arrayBuffer()));
       shell.delayDb = parseDelays(new Uint8Array(await dRes.arrayBuffer()), key);
     }
-  } catch { /* no local database; Calculations will report it */ }
+  } catch { /* fall through to the synthetic database */ }
+  if (!shell.delayDb) {
+    // No real product database available - use the synthetic one so the
+    // calculations work rather than reporting a stale database. Real plans
+    // dropped onto the page will resolve against it only if their product
+    // names happen to match; otherwise their delays read as zero, which the
+    // status line makes visible.
+    shell.delayDb = demoDelayDb();
+  }
 
   try {
     // ?plan=NAME.XEL loads any plan sitting in samples/, which makes it easy
