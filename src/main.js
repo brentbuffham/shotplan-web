@@ -15,6 +15,7 @@ let filename = 'DEMO.XEL';
 
 function load(plan, name) {
   filename = name;
+  shell.filename = name;
   shell.planBounds = planBounds(plan);
   shell.setPlan(plan, shell.planBounds);
   render();
@@ -90,6 +91,7 @@ function render() {
 }
 
 shell.onChange = render;
+shell.onLoad = (plan, name) => load(plan, name);
 attachInput(canvas, shell);
 
 /**

@@ -18,6 +18,7 @@ import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
 import { overlapProbabilities } from '../calc/overlap.js';
 import { timeField } from '../calc/contour.js';
+import { loadPlan, savePlan, importSurvey } from './files.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
@@ -565,6 +566,47 @@ export class Shell {
         this.close();
         return;
     }
+    // --- Files menu -------------------------------------------------------
+    if (menuLabel === 'Files' && item.label === 'Load') {
+      this.close();
+      loadPlan().then((r) => {
+        if (!r) return;                       // cancelled
+        this.onLoad?.(r.plan, r.name);
+        this.status = '';
+        this.onChange();
+      }).catch((e) => {
+        this.status = `Error ${e.message} while reading datafile.`;
+        this.onChange();
+      });
+      return;
+    }
+    if (menuLabel === 'Files' && item.label === 'Save') {
+      this.close();
+      if (!this.plan) { this.status = 'WARNING the data has not been saved.'; return; }
+      savePlan(this.plan, this.filename ?? 'PLAN.XEL').then((name) => {
+        if (name) this.status = `Saved ${name}`;
+        this.onChange();
+      }).catch((e) => {
+        this.status = `Disk Full Error - ${e.message}`;
+        this.onChange();
+      });
+      return;
+    }
+    if (menuLabel === 'Files' && item.label === 'Import') {
+      this.close();
+      importSurvey().then((r) => {
+        if (!r) return;
+        this.status = r.rows.length
+          ? `${r.name}: ${r.rows.length} survey points read - import not wired to the plan yet`
+          : `${r.name}: no numeric rows found`;
+        this.onChange();
+      }).catch((e) => {
+        this.status = `Error ${e.message} while reading datafile.`;
+        this.onChange();
+      });
+      return;
+    }
+
     // Everything else is not implemented yet. Say so plainly rather than
     // silently doing nothing, which reads as a broken click.
     this.status = `${menuLabel} / ${item.label} - not implemented yet`;
