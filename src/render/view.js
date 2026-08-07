@@ -8,11 +8,12 @@
  */
 import {
   WIDTH, HEIGHT, BLACK, BLUE, CYAN, WHITE, YELLOW, LIGHTGREEN, LIGHTCYAN,
-  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED,
+  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED, LIGHTBLUE,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
 import { histogram, envelopeSummary, holesInSlice } from '../calc/envelope.js';
+import { BANDS, bandOf } from '../calc/overlap.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -458,6 +459,87 @@ export function drawEnvelope(s, times, opts = {}) {
     s.text(`${window} ms time slice at ${Math.round(t)} ms overlaps ${count} holes`,
            left, top - 20, LIGHTCYAN);
   }
+}
+
+/**
+ * Overlap: the Delaunay adjacency mesh, each edge coloured by the probability
+ * that the pair misbehaves, with the original's legend box.
+ *
+ * Colours are read off v3.0's own legend. Edges below the lowest band are not
+ * drawn at all - the original's floor, and it is what makes the plot readable,
+ * since most pairs in a sound tie-up are nowhere near reversing.
+ */
+export const BAND_COLOURS = [LIGHTRED, YELLOW, LIGHTBLUE, LIGHTGREEN];
+
+export function drawOverlap(s, plan, result, opts = {}) {
+  const show = { ...opts };
+  const t = opts.transform ?? fitTransform(planBounds(plan));
+
+  // Same chrome as the plan view - Overlap draws over the plan, not instead
+  // of it.
+  const overview = opts.isOverview !== false;
+  s.clear(overview ? CYAN : BLUE);
+  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
+  if (!plan || !t || !result) return;
+
+  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
+
+  // Boundary and benches stay visible for context.
+  if (plan.boundary.length > 1) {
+    for (let i = 0; i < plan.boundary.length; i++) {
+      const a = plan.boundary[i];
+      const b = plan.boundary[(i + 1) % plan.boundary.length];
+      if (a.e === null || b.e === null) continue;
+      s.line(t.x(a.e), t.y(a.n), t.x(b.e), t.y(b.n), MAGENTA);
+    }
+  }
+  for (const bench of plan.benches) {
+    for (const pts of [bench.crest, bench.foot]) {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i], b = pts[i + 1];
+        if (a.e === null || b.e === null) continue;
+        s.line(t.x(a.e), t.y(a.n), t.x(b.e), t.y(b.n), GREEN);
+      }
+    }
+  }
+
+  // Adjacency edges, worst last so the dangerous ones sit on top.
+  const metric = opts.metric ?? 'reversal';
+  const drawn = result.edges
+    .map((e) => ({ e, band: bandOf(e[metric]) }))
+    .filter((x) => x.band >= 0)
+    .sort((x, y) => y.band - x.band);
+  for (const { e, band } of drawn) {
+    const A = result.holes[e.a], B = result.holes[e.b];
+    if (!A || !B) continue;
+    s.line(t.x(A.e), t.y(A.n), t.x(B.e), t.y(B.n), BAND_COLOURS[band]);
+  }
+
+  // Collars on top.
+  const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  for (const h of result.holes) {
+    if (h.e === null) continue;
+    const x = t.x(h.e), y = t.y(h.n);
+    s.fillCircle(x, y, r, BLACK);
+    s.circle(x, y, r, WHITE);
+  }
+
+  drawScaleBar(s, t);
+  s.resetClip();
+
+  // Legend, upper right inside the plot.
+  const lw = 9 * 8;   // wide enough for '>10%' plus the colour swatch
+  const lh = BANDS.length * 14 + 8;
+  const lx = PLOT.x1 - lw - 8;
+  const ly = PLOT.y0 + 8;
+  s.fillRect(lx, ly, lx + lw, ly + lh, BLACK);
+  s.rect(lx, ly, lx + lw, ly + lh, WHITE);
+  BANDS.forEach((b, i) => {
+    const y = ly + 5 + i * 14;
+    s.hline(lx + 5, lx + 22, y + 7, BAND_COLOURS[i]);
+    s.text(b.label, lx + 26, y, WHITE);
+  });
 }
 
 /** Marching-ant style rectangle for the zoom window. */

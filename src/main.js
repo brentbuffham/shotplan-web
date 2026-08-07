@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { demoPlan } from './demo-plan.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -20,6 +20,19 @@ function load(plan, name) {
 }
 
 function render() {
+  if (shell.overlap) {
+    drawOverlap(screen, shell.plan, shell.overlap.result, {
+      transform: shell.view.transform(),
+      isOverview: shell.view.isOverview,
+      metric: shell.overlap.metric,
+    });
+    drawMenuBar(screen, shell.openMenu);
+    drawDetonatorBar(screen, shell.plan);
+    drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
+    drawMenus(screen, shell);
+    display.present();
+    return;
+  }
   // Time Envelope replaces the plan view entirely, as it does in v3.0.
   if (shell.envelope) {
     drawEnvelope(screen, shell.times, {
@@ -80,11 +93,15 @@ async function boot() {
   } catch { /* no local database; Calculations will report it */ }
 
   try {
-    const res = await fetch('/samples/TEST3.XEL');
+    // ?plan=NAME.XEL loads any plan sitting in samples/, which makes it easy
+    // to exercise a calculation against a production pattern rather than the
+    // small test one.
+    const want = new URLSearchParams(location.search).get('plan') ?? 'TEST3.XEL';
+    const res = await fetch('/samples/' + want);
     if (res.ok) {
       const buf = new Uint8Array(await res.arrayBuffer());
-      load(parseXel(decodeXel(buf)), 'TEST3.XEL');
-      drop.textContent = `TEST3.XEL - ${shell.plan.holes.length} records, ${shell.plan.links.length} ties`;
+      load(parseXel(decodeXel(buf)), want.toUpperCase());
+      drop.textContent = `${want.toUpperCase()} - ${shell.plan.holes.length} records, ${shell.plan.links.length} ties`;
       return;
     }
   } catch { /* no local sample; fall through */ }

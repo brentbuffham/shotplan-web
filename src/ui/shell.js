@@ -16,6 +16,7 @@ import { PLOT } from '../render/view.js';
 import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
+import { overlapProbabilities } from '../calc/overlap.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
@@ -65,6 +66,7 @@ export class Shell {
     this.times = null;       // computeTimes() result for the loaded plan
     this.vis = null;         // running Visualization, if any
     this.envelope = null;    // {mode: 'Display'|'Explore'} when showing it
+    this.overlap = null;     // {metric, result} when showing Overlap
   }
 
   /**
@@ -111,6 +113,35 @@ export class Shell {
     this.close();
   }
 
+  /**
+   * Calculations > Overlap > Out of sequence | Crowding 80%
+   *
+   * Runs the simulation up front. A few hundred trials over a few hundred
+   * adjacent pairs is a couple of hundred milliseconds, so it is done once on
+   * entry rather than per frame - panning and zooming must stay responsive.
+   */
+  startOverlap(metric) {
+    if (!this.times) {
+      this.status = 'Error: This calculation requires an up-to-date database.';
+      this.close();
+      return;
+    }
+    if (this.times.fire.size < 2) {
+      this.status = 'Excuse me! There are less than two holes present on your plan';
+      this.close();
+      return;
+    }
+    const result = overlapProbabilities(this.plan, this.delayDb, { trials: 300 });
+    this.overlap = { metric, result };
+    this.status = '';
+    this.close();
+  }
+
+  stopOverlap() {
+    this.overlap = null;
+    this.onChange();
+  }
+
   stopEnvelope() {
     this.envelope = null;
     this.onChange();
@@ -143,11 +174,18 @@ export class Shell {
     }
     this.vis = null;
     this.envelope = null;
+    this.overlap = null;
     this.recompute();
   }
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.overlap) {
+      // Both captions are verbatim from SHOTPLAN.OVR @0xBB5A.
+      return this.overlap.metric === 'reversal'
+        ? 'This shows probability of adjacent holes firing out of sequence'
+        : 'This shows probability of adjacent holes firing at less than 80% of mean delay';
+    }
     if (this.envelope) {
       return this.envelope.mode === 'Explore'
         ? 'Use cursor and Left/INS button to select display range from vertical bar graph'
@@ -352,6 +390,7 @@ export class Shell {
    * "Right/Del button expand/contract" means.
    */
   rightClick(px, py) {
+    if (this.overlap) { this.stopOverlap(); return; }
     if (this.envelope) { this.stopEnvelope(); return; }
     if (this.drag) { this.drag = null; this.onChange(); return; }
     if (this.openSub >= 0) {
@@ -382,6 +421,7 @@ export class Shell {
   }
 
   key(k) {
+    if (this.overlap && k === 'Escape') { this.stopOverlap(); return; }
     if (this.envelope && k === 'Escape') { this.stopEnvelope(); return; }
     if (this.vis) {
       if (k === 'Escape') { this.stopVisualize(); return; }
@@ -437,6 +477,8 @@ export class Shell {
       this.startEnvelope(item.label);
       return;
     }
+    if (item.label === 'Out of sequence') { this.startOverlap('reversal'); return; }
+    if (item.label === 'Crowding 80%') { this.startOverlap('crowding'); return; }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.
     switch (item.label) {
       case 'Overview':
