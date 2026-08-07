@@ -13,12 +13,13 @@
  */
 import { WIDTH, BLUE, CYAN, WHITE, YELLOW, BLACK, LIGHTGREY } from '../render/screen.js';
 import { PLOT } from '../render/view.js';
-import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
+import { MENUS, EDIT_MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
 import { overlapProbabilities } from '../calc/overlap.js';
 import { timeField } from '../calc/contour.js';
 import { loadPlan, savePlan, importSurvey } from './files.js';
+import { addTie, TIE_PROMPT } from './edit.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
@@ -34,10 +35,10 @@ const MENU_START = 1;
 const MENU_GAP = 4;
 
 /** Character column where each top-level menu label starts. */
-export function menuColumns() {
+export function menuColumns(menus = MENUS) {
   const cols = [];
   let col = MENU_START;
-  for (const m of MENUS) {
+  for (const m of menus) {
     cols.push(col);
     col += m.label.length + MENU_GAP;
   }
@@ -71,6 +72,12 @@ export class Shell {
     this.overlap = null;     // {metric, result} when showing Overlap
     this.contour = null;     // {mode, field, step} when showing contours
     this.quantities = false; // showing the Quantities report
+
+    // --- edit mode ---
+    this.editMode = false;
+    this.editOp = null;      // e.g. 'Tie'
+    this.armedSlot = -1;     // index into the surface detonator bar
+    this.tieFrom = null;     // 1-based hole index, once the first is picked
   }
 
   /**
@@ -231,6 +238,9 @@ export class Shell {
 
   /** What the status line should show right now. */
   statusLine() {
+    if (this.editMode && this.editOp === 'Tie') {
+      return this.status || TIE_PROMPT;
+    }
     if (this.quantities) return 'Quantities summary      Right/DEL or ESC to exit';
     if (this.contour) {
       // Both captions verbatim from SHOTPLAN.OVR (0x18037, 0x15D54).
@@ -269,10 +279,28 @@ export class Shell {
     return this.readout;
   }
 
+  /**
+   * Label of the open submenu's PARENT item.
+   *
+   * `menuLabel` passed to activate() is the top-level menu, which is not
+   * enough to disambiguate: "Tie" appears under Add, Remove and Change, and
+   * "Display"/"Explore" under both Time Envelope and Relief.
+   */
+  parentLabel() {
+    if (this.openMenu < 0 || this.openSub < 0) return null;
+    const items = itemsOf(this.menus[this.openMenu]);
+    return items?.[this.openSub]?.label ?? null;
+  }
+
+  /** The active menu bar - edit mode replaces it wholesale. */
+  get menus() {
+    return this.editMode ? EDIT_MENUS : MENUS;
+  }
+
   /** Geometry of the open dropdown, in pixels. */
   dropdownBox() {
     if (this.openMenu < 0) return null;
-    const entry = MENUS[this.openMenu];
+    const entry = this.menus[this.openMenu];
     const items = itemsOf(entry);
     if (!items) return null;
     const cols = menuColumns();
@@ -303,12 +331,20 @@ export class Shell {
   /** Which top-level menu, if any, is under this pixel? */
   hitMenuBar(px, py) {
     if (py >= CELL_H) return -1;
-    const cols = menuColumns();
+    const menus = this.menus;
+    const cols = menuColumns(menus);
     const col = Math.floor(px / CELL_W);
-    for (let i = 0; i < MENUS.length; i++) {
-      if (col >= cols[i] && col < cols[i] + MENUS[i].label.length) return i;
+    for (let i = 0; i < menus.length; i++) {
+      if (col >= cols[i] && col < cols[i] + menus[i].label.length) return i;
     }
     return -1;
+  }
+
+  /** Which detonator slot, if any, is under this pixel? */
+  hitDetonatorBar(px, py) {
+    if (py < CELL_H || py >= 2 * CELL_H) return -1;
+    const slot = Math.floor(px / (10 * CELL_W));
+    return slot >= 0 && slot < 8 ? slot : -1;
   }
 
   hitBox(box, px, py) {
@@ -360,6 +396,8 @@ export class Shell {
 
   mouseMove(px, py) {
     let changed = false;
+    // Edit mode draws a tool at the pointer, so it has to know where it is.
+    if (this.editMode) { this.pointer = { x: px, y: py }; changed = true; }
     if (this.contour && this.contour.mode === 'Relief' && this.contour.sub === 'Explore') {
       this.contour.cursor = { x: px, y: py };
       this.onChange();
@@ -410,7 +448,7 @@ export class Shell {
       const sub = this.submenuBox();
       const si = this.hitBox(sub, px, py);
       if (si >= 0) {
-        this.activate(sub.items[si], MENUS[this.openMenu].label);
+        this.activate(sub.items[si], this.menus[this.openMenu].label);
         return;
       }
       const box = this.dropdownBox();
@@ -418,13 +456,43 @@ export class Shell {
       if (i >= 0) {
         const item = box.items[i];
         if (itemsOf(item)) return; // parent of a submenu; hover opens it
-        this.activate(item, MENUS[this.openMenu].label);
+        this.activate(item, this.menus[this.openMenu].label);
         return;
       }
       // Clicked away — close.
       this.close();
       return;
     }
+    // --- detonator bar: arm a product ---
+    if (this.editMode) {
+      const slot = this.hitDetonatorBar(px, py);
+      if (slot >= 0) {
+        this.armedSlot = slot;
+        this.status = '';
+        this.onChange();
+        return;
+      }
+    }
+
+    // --- edit: pick holes to tie ---
+    if (this.editMode && this.editOp === 'Tie' && inPlot(px, py)) {
+      const t = this.view.transform();
+      const hole = pickHole(this.plan, t, px, py, 10);
+      if (!hole) return;
+      const key = hole.index + 1;
+      if (this.tieFrom === null) {
+        this.tieFrom = key;
+        this.status = '';
+      } else {
+        const r = addTie(this.plan, this.tieFrom, key, this.armedSlot + 1);
+        this.status = r.ok ? '' : r.reason;
+        this.tieFrom = null;
+        if (r.ok) this.recompute();          // firing times change with the tie
+      }
+      this.onChange();
+      return;
+    }
+
     // --- plan area: begin a zoom window ---
     if (inPlot(px, py)) {
       this.status = '';
@@ -505,10 +573,10 @@ export class Shell {
       if (k === ' ') { this.vis.togglePause(); this.onChange(); return; }
     }
     if (k === 'Escape') { this.rightClick(); return; }
-    const cols = menuColumns();
+    const cols = menuColumns(this.menus);
     const upper = k.toUpperCase();
     if (this.openMenu < 0) {
-      const i = MENUS.findIndex((m) => m.label[m.hot].toUpperCase() === upper);
+      const i = this.menus.findIndex((m) => m.label[m.hot].toUpperCase() === upper);
       if (i >= 0) { this.openMenu = i; this.onChange(); }
       return;
     }
@@ -516,7 +584,7 @@ export class Shell {
     const sub = this.submenuBox();
     if (sub) {
       const j = sub.items.findIndex((it) => it.label[it.hot ?? 0]?.toUpperCase() === upper);
-      if (j >= 0) { this.activate(sub.items[j], MENUS[this.openMenu].label); return; }
+      if (j >= 0) { this.activate(sub.items[j], this.menus[this.openMenu].label); return; }
     }
     const box = this.dropdownBox();
     if (!box) return;
@@ -531,10 +599,14 @@ export class Shell {
       this.onChange();
       return;
     }
-    this.activate(box.items[i], MENUS[this.openMenu].label);
+    this.activate(box.items[i], this.menus[this.openMenu].label);
   }
 
   activate(item, menuLabel) {
+    // Resolve the submenu parent FIRST. Several branches below reset
+    // openMenu/openSub, and parentLabel() reads them - computing it late
+    // returns null and silently skips the operation.
+    const parent = this.parentLabel();
     if (item.toggle) {
       this.toggles[item.toggle] = !this.toggles[item.toggle];
       this.status = '';
@@ -553,9 +625,6 @@ export class Shell {
     if (menuLabel === 'Calculations' && (item.label === 'Display' || item.label === 'Explore')) {
       // Both Time Envelope and Relief offer Display|Explore, so the choice
       // depends on which parent item is open, not on the label alone.
-      const parent = this.openSub >= 0
-        ? itemsOf(MENUS[this.openMenu])[this.openSub]?.label
-        : null;
       if (parent === 'Relief') this.startContours('Relief', item.label);
       else this.startEnvelope(item.label);
       return;
@@ -596,6 +665,37 @@ export class Shell {
         this.close();
         return;
     }
+    // --- Edit mode --------------------------------------------------------
+    // Choosing anything from the Edit menu enters edit mode, which replaces
+    // the whole menu bar rather than showing a mode indicator somewhere.
+    if (menuLabel === 'Edit' && !this.editMode) {
+      this.editMode = true;
+      this.editOp = null;
+      this.armedSlot = -1;
+      this.tieFrom = null;
+      // Deliberately does NOT clear openMenu/openSub here - the chosen item
+      // still has to run, and close() will clear them when it does.
+    }
+    if (item.label === 'Exit EDIT') {
+      this.editMode = false;
+      this.editOp = null;
+      this.armedSlot = -1;
+      this.tieFrom = null;
+      this.status = '';
+      this.close();
+      return;
+    }
+    if (this.editMode && item.label === 'Tie' && parent === 'Add') {
+      this.editOp = 'Tie';
+      this.tieFrom = null;
+      // Arm the first defined surface product so a click does something even
+      // before the user picks one.
+      if (this.armedSlot < 0) this.armedSlot = 0;
+      this.status = '';
+      this.close();
+      return;
+    }
+
     // --- Files menu -------------------------------------------------------
     if (menuLabel === 'Files' && item.label === 'Load') {
       this.close();

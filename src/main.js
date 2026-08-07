@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { DEMO_PLAN_XEL } from './format/demo-plan-data.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -96,6 +96,24 @@ function render() {
     isOverview: shell.view.isOverview,
     visualization: shell.vis,
   });
+  // Edit mode replaces the menu bar and the status line, and gives the
+  // pointer a tool. Drawn over the plan the calculations already produced.
+  if (shell.editMode) {
+    drawEditMenuBar(screen, shell.openMenu);
+    drawDetonatorBar(screen, shell.plan, shell.armedSlot);
+    // The toggle strip is the resting state; an active operation replaces it
+    // with its prompt, as v3.0 does.
+    if (shell.editOp) {
+      drawStatusBar(screen, filename, shell.plan?.title ?? '', shell.statusLine());
+    } else {
+      drawEditStrip(screen, shell.toggles);
+    }
+    if (shell.editOp === 'Tie' && shell.pointer) {
+      drawCursorSprite(screen,
+        shell.tieFrom === null ? CURSOR_START : CURSOR_END,
+        shell.pointer.x, shell.pointer.y);
+    }
+  }
   drawMenus(screen, shell);
   display.present();
 }

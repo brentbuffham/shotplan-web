@@ -108,6 +108,46 @@ export const MENUS = [
 ];
 
 /**
+ * Edit mode replaces the whole menu bar, it does not open a dropdown.
+ * Transcribed from SHOTPLAN.OVR @0x21A0B, hotkeys ARCSWDZE, and confirmed
+ * against a screenshot of v3.0 in edit mode.
+ */
+export const EDIT_MENUS = [
+  { label: 'Add', hot: 0, items: ['Hole', 'Pattern', 'Fill-in', 'Bench', 'Dummy hole', 'Tie', 'Lead-in', 'Text', 'Boundary'] },
+  { label: 'Remove', hot: 0, items: ['Holes', 'Bench', 'Tie', 'Lead-in', 'Text', 'Boundary'] },
+  { label: 'Change', hot: 0, items: ['Positions of Holes', 'Hole data', 'Bench', 'In-hole delay', 'Tie', 'Lead-in', 'Coordinates', 'Text', 'Boundary'] },
+  { label: 'Show', hot: 0, items: [
+    { label: 'Collars only shown', hot: 0 },
+    { label: 'Ties', hot: 0, toggle: 'ties' },
+    { label: 'Nom. times', hot: 0, toggle: 'nomTimes' },
+    { label: 'Inhole delay', hot: 0, toggle: 'inholeDelay' },
+    { label: 'Bench', hot: 0, toggle: 'benches' },
+    { label: 'Depth/Dia', hot: 0, toggle: 'depthDia' },
+    { label: 'Gridlines', hot: 0, toggle: 'gridlines' },
+    { label: 'Hole tracks', hot: 0, toggle: 'holeTracks' },
+    { label: 'Text strings', hot: 2, toggle: 'texts' },
+    { label: 'Boundary', hot: 7, toggle: 'boundary' },
+  ] },
+  { label: 'Window', hot: 0, items: ['Overview', 'Zoom', 'Expand', 'Contract'] },
+  { label: 'Data', hot: 0 },
+  { label: 'Exit EDIT', hot: 0 },
+];
+
+/**
+ * The live toggle strip along the bottom in edit mode, replacing the status
+ * bar. Captions are from SHOTPLAN.EXE @0x1EEE - six of the nine Show toggles,
+ * the ones that change what you can see well enough to matter while editing.
+ */
+export const EDIT_STRIP = [
+  { caption: 'BENCH', toggle: 'benches' },
+  { caption: 'TRACK', toggle: 'holeTracks' },
+  { caption: 'TIES', toggle: 'ties' },
+  { caption: 'INHOLE', toggle: 'inholeDelay' },
+  { caption: 'NOMS', toggle: 'nomTimes' },
+  { caption: 'DP/DIA', toggle: 'depthDia' },
+];
+
+/**
  * Default display toggles.
  *
  * `Ties` is the only one the original starts with on — confirmed from a

@@ -16,6 +16,8 @@ import { histogram, envelopeSummary, holesInSlice } from '../calc/envelope.js';
 import { BANDS, bandOf } from '../calc/overlap.js';
 import { contours, firstMovement } from '../calc/contour.js';
 import { quantities } from '../calc/quantities.js';
+import { EDIT_MENUS, EDIT_STRIP } from '../ui/menus.js';
+import { CURSOR_START, CURSOR_END } from './cursor-sprites.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -57,7 +59,7 @@ export function drawMenuBar(s, active = -1) {
  * Detonator bar — eight surface-detonator slots, each with a coloured
  * connector glyph and its product name (or "Not Def.").
  */
-export function drawDetonatorBar(s, plan) {
+export function drawDetonatorBar(s, plan, armedSlot = -1) {
   s.fillRect(0, 16, WIDTH - 1, 31, BLUE);
   // Each slot previews the tie-line style it draws with: a short line segment
   // in that detonator's colour, then the product name. CP437 0xC4 is the
@@ -69,9 +71,13 @@ export function drawDetonatorBar(s, plan) {
     const d = surface[i];
     const name = d && d.defined ? d.description : 'Not Def.';
     const c = colours[i % colours.length];
-    s.glyph(0xc4, x, 16, c, BLUE);
-    s.glyph(0xc4, x + 8, 16, c, BLUE);
-    s.text(name.slice(0, 8), x + 16, 16, c, BLUE);
+    // An armed product inverts to yellow, as v3.0 shows the active connector.
+    const armed = i === armedSlot;
+    const bg = armed ? YELLOW : BLUE;
+    if (armed) s.fillRect(x, 16, x + 10 * 8 - 1, 31, YELLOW);
+    s.glyph(0xc4, x, 16, armed ? BLACK : c, bg);
+    s.glyph(0xc4, x + 8, 16, armed ? BLACK : c, bg);
+    s.text(name.slice(0, 8), x + 16, 16, armed ? BLACK : c, bg);
   }
 }
 
@@ -803,6 +809,54 @@ function pointInTriangle(p, [a, b, c]) {
   const v = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / d;
   return u >= 0 && v >= 0 && u + v <= 1;
 }
+
+/**
+ * Edit-mode menu bar. Same geometry as the main one, different items - the bar
+ * is replaced wholesale rather than a mode being shown somewhere.
+ */
+export function drawEditMenuBar(s, active = -1) {
+  s.fillRect(0, 0, WIDTH - 1, 15, BLUE);
+  let col = MENU_START;
+  EDIT_MENUS.forEach((m, i) => {
+    const x = col * 8;
+    const fg = i === active ? YELLOW : WHITE;
+    s.text(m.label, x, 0, fg, BLUE);
+    s.hline(x + m.hot * 8, x + m.hot * 8 + 7, 14, fg);
+    col += m.label.length + MENU_GAP;
+  });
+}
+
+/**
+ * The live toggle strip that replaces the status bar in edit mode.
+ * Captions are from SHOTPLAN.EXE @0x1EEE - BENCH-ON, TRACK-OFF and so on.
+ */
+export function drawEditStrip(s, toggles) {
+  const y = HEIGHT - 16;
+  s.fillRect(0, y, WIDTH - 1, HEIGHT - 1, BLUE);
+  let col = 0;
+  for (const t of EDIT_STRIP) {
+    const on = !!toggles[t.toggle];
+    const label = `${t.caption}-${on ? 'ON' : 'OFF'}`;
+    s.text(label, col * 8, y, on ? LIGHTCYAN : LIGHTGREY, BLUE);
+    col += 13;
+  }
+}
+
+/** Blit a cursor sprite centred on the pointer. */
+export function drawCursorSprite(s, rows, x, y) {
+  const w = rows[0].length;
+  const ox = x - (w >> 1);
+  const oy = y - (rows.length >> 1);
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < w; c++) {
+      const ch = rows[r][c];
+      if (ch === 'Y') s.px(ox + c, oy + r, YELLOW);
+      else if (ch === 'W') s.px(ox + c, oy + r, WHITE);
+    }
+  }
+}
+
+export { CURSOR_START, CURSOR_END };
 
 /** Dotted polyline, as v3.0 draws contours. */
 function dottedPath(s, pts, colour, every = 3) {
