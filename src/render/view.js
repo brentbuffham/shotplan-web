@@ -11,6 +11,7 @@ import {
   LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
+import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
 
 const MENUS = [
   { label: 'Files', hot: 0 },
@@ -254,7 +255,7 @@ export function drawPlan(s, plan, opts = {}) {
     if (h.e === null) continue;
     const x = t.x(h.e), y = t.y(h.n);
     if (vis && vis.hasFired(h.index + 1)) {
-      burst(s, x, y, r, vis.sinceFired(h.index + 1));
+      burst(s, x, y, r);
     } else {
       s.fillCircle(x, y, r, BLACK);
       s.circle(x, y, r, WHITE);
@@ -272,8 +273,7 @@ export function drawPlan(s, plan, opts = {}) {
       const h = byIndex.get(idx);
       if (!h || h.e === null) return;
       const x = t.x(h.e), y = t.y(h.n);
-      s.fillRect(x - 4, y + 4, x + 4, y + 15, MAGENTA);
-      s.text(String(k + 1), x - 3, y + 4, WHITE, MAGENTA);
+      leadInMarker(s, x, y + 4, String(k + 1));
     });
   }
 
@@ -336,24 +336,44 @@ function arrowHead(s, ax, ay, bx, by, c) {
  * lit for the rest of the run, so the fired region reads as a growing front.
  * The burst flares briefly white then settles to yellow/red.
  */
-function burst(s, x, y, r, age) {
-  // A jagged star: alternating long and short arms, red at the tips through
-  // orange to a white-hot core. v3.0's bursts are big and stay lit, so the
-  // fired region reads as a solid advancing front rather than a sparkle.
-  const flash = age !== null && age < 20;
-  const long = r + (flash ? 11 : 9);
-  const short = r + 3;
-  const arms = 16;
-  for (let i = 0; i < arms; i++) {
-    const a = (i / arms) * Math.PI * 2;
-    const rad = i % 2 ? long : short;
-    s.line(x, y, Math.round(x + Math.cos(a) * rad),
-           Math.round(y + Math.sin(a) * rad), i % 2 ? LIGHTRED : RED);
+const BURST_COLOUR = { r: RED, R: LIGHTRED, Y: YELLOW, W: WHITE };
+
+/**
+ * A detonated hole, blitted from the original's own sprite.
+ *
+ * Scaled down when the view is zoomed out far enough that a full-size burst
+ * would swamp the pattern — the original runs at one fixed plan scale, so this
+ * is the one place a zoomable rebuild has to make a decision the original never
+ * faced. Nearest-neighbour, so it stays on the pixel grid either way.
+ */
+function burst(s, x, y, r) {
+  const step = r >= 4 ? 1 : 2;   // drop every other pixel when collars are tiny
+  const ox = x - Math.floor(BURST_W / (2 * step));
+  const oy = y - Math.floor(BURST_H / (2 * step));
+  for (let sy = 0; sy < BURST_H; sy += step) {
+    const row = BURST[sy];
+    for (let sx = 0; sx < BURST_W; sx += step) {
+      const c = BURST_COLOUR[row[sx]];
+      if (c !== undefined) s.px(ox + sx / step, oy + sy / step, c);
+    }
   }
-  // Body and core.
-  s.fillCircle(x, y, Math.max(2, r + 1), YELLOW);
-  s.fillCircle(x, y, Math.max(1, r - 1), flash ? WHITE : LIGHTRED);
-  if (!flash) s.fillCircle(x, y, Math.max(1, r - 2), WHITE);
+}
+
+/**
+ * Lead-in marker: a house shape — a square body under a pitched roof — filled
+ * magenta with the lead-in number on it. Drawn below the collar it belongs to.
+ */
+function leadInMarker(s, x, yTop, label) {
+  const w = 5;              // half-width of the body
+  const roof = 4;           // roof height
+  const body = 11;          // body height
+  // Roof: widening rows up to the eaves.
+  for (let i = 0; i < roof; i++) {
+    const half = Math.round((i / (roof - 1)) * w);
+    s.hline(x - half, x + half, yTop + i, MAGENTA);
+  }
+  s.fillRect(x - w, yTop + roof, x + w, yTop + roof + body, MAGENTA);
+  s.text(label, x - 3, yTop + roof + 1, WHITE, MAGENTA);
 }
 
 /** Marching-ant style rectangle for the zoom window. */
