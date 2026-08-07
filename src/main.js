@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawTiePreview, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { DEMO_PLAN_XEL } from './format/demo-plan-data.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -108,6 +108,10 @@ function render() {
     } else {
       drawEditStrip(screen, shell.toggles);
     }
+    if (shell.editOp === 'Tie') {
+      drawTiePreview(screen, shell.plan, shell.view.transform(),
+        shell.tieFrom, shell.pointer, shell.armedSlot + 1);
+    }
     if (shell.editOp === 'Tie' && shell.pointer) {
       drawCursorSprite(screen,
         shell.tieFrom === null ? CURSOR_START : CURSOR_END,
@@ -117,6 +121,10 @@ function render() {
   drawMenus(screen, shell);
   display.present();
 }
+
+// A debug handle. Useful from the console and for driving the app in tests,
+// and it exposes nothing a user could not reach through the UI anyway.
+window.shotplan = { shell, render, get plan() { return shell.plan; } };
 
 shell.onChange = render;
 shell.onLoad = (plan, name) => load(plan, name);

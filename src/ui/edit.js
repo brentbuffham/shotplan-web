@@ -23,9 +23,30 @@
  * one, so you never look away from the plan. Worth preserving exactly.
  */
 
-/** Verbatim from SHOTPLAN.OVR. */
-export const TIE_PROMPT =
+/**
+ * Prompts, all verbatim from SHOTPLAN.OVR.
+ *
+ * Note that Add Tie has TWO: the wording changes once the first hole is
+ * picked, so the status line and the cursor sprite both track the step. And
+ * the Change prompt says "select surf. tie type AND tie to change", which is
+ * the whole interaction - arm a product, then click the tie. You never have to
+ * remove a tie to re-assign its connector.
+ */
+export const TIE_PROMPT_FIRST =
   'Use Left/INS button on first hole or Right/DEL button to finish';
+export const TIE_PROMPT_SECOND =
+  'Use Left/INS button on CONNECTING hole.';
+export const TIE_PROMPT_DELETE =
+  'Use Left/Ins key to select surface tie to delete then Right/Del to finish.';
+export const TIE_PROMPT_CHANGE =
+  'Use Left/Ins to select surf. tie type and tie to change or Right/Del to finish.';
+
+/** Re-assign an existing tie's surface product. */
+export function changeTieType(plan, index, detonatorType) {
+  if (index < 0 || index >= plan.links.length) return false;
+  plan.links[index].type = detonatorType;
+  return true;
+}
 
 /**
  * Distance between two holes, which a tie records as its own `dist` and which
@@ -41,10 +62,13 @@ export function holeDistance(a, b) {
  * Mutates the plan the way the original does: appends to the link table and
  * bumps the count. Hole references are 1-BASED, matching the file format.
  *
- * Refuses a duplicate in either direction — a tie-up is a directed graph, but
- * two connectors between the same pair is a wiring error rather than a design.
+ * A tie over an existing pair OVERWRITES it — checked against v3.0. It does
+ * not refuse and it does not create a second connector. That is the better
+ * design as well as the faithful one: re-arm a product, draw over a tie, and
+ * it changes, without hunting for the exact line to pick. Direction is taken
+ * from the new click order, so drawing back the other way reverses the tie.
  *
- * @returns {{ok: boolean, reason?: string}}
+ * @returns {{ok: boolean, replaced?: boolean, reason?: string}}
  */
 export function addTie(plan, hole1Index1, hole2Index1, detonatorType) {
   if (hole1Index1 === hole2Index1) {
@@ -55,11 +79,17 @@ export function addTie(plan, hole1Index1, hole2Index1, detonatorType) {
   const b = byIndex.get(hole2Index1);
   if (!a || !b) return { ok: false, reason: 'Argh!! - Invalid pointers' };
 
-  const exists = plan.links.some(
+  const existing = plan.links.find(
     (l) => (l.hole1 === hole1Index1 && l.hole2 === hole2Index1)
         || (l.hole1 === hole2Index1 && l.hole2 === hole1Index1)
   );
-  if (exists) return { ok: false, reason: 'These holes are already tied' };
+  if (existing) {
+    existing.hole1 = hole1Index1;
+    existing.hole2 = hole2Index1;
+    existing.type = detonatorType;
+    existing.dist = holeDistance(a, b);
+    return { ok: true, replaced: true };
+  }
 
   plan.links.push({
     index: plan.links.length,

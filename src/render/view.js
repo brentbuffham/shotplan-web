@@ -842,6 +842,29 @@ export function drawEditStrip(s, toggles) {
   }
 }
 
+/**
+ * Feedback while a tie is being drawn: the picked hole is ringed, and a
+ * rubber band runs from it to the pointer in the armed product's colour.
+ *
+ * Without this the operation is invisible - the tie is created correctly but
+ * nothing between the two clicks says so, which reads as the tool being
+ * broken. v3.0 draws the band, and it is doing real work: it shows which hole
+ * you caught and what colour the connector will be before you commit.
+ */
+export function drawTiePreview(s, plan, t, fromIndex1, pointer, tieType) {
+  if (!t || fromIndex1 === null || fromIndex1 === undefined) return;
+  const hole = plan.holes.find((h) => h.index + 1 === fromIndex1);
+  if (!hole || hole.e === null) return;
+  const x = t.x(hole.e), y = t.y(hole.n);
+  const colour = TIE_COLOURS[tieType % TIE_COLOURS.length];
+  s.circle(x, y, 6, colour);
+  s.circle(x, y, 7, colour);
+  if (pointer) {
+    s.line(x, y, pointer.x, pointer.y, colour);
+    arrowHead(s, x, y, pointer.x, pointer.y, colour);
+  }
+}
+
 /** Blit a cursor sprite centred on the pointer. */
 export function drawCursorSprite(s, rows, x, y) {
   const w = rows[0].length;

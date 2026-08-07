@@ -19,7 +19,10 @@ import { computeTimes } from '../calc/timing.js';
 import { overlapProbabilities } from '../calc/overlap.js';
 import { timeField } from '../calc/contour.js';
 import { loadPlan, savePlan, importSurvey } from './files.js';
-import { addTie, TIE_PROMPT } from './edit.js';
+import {
+  addTie, removeTie, changeTieType, pickTie,
+  TIE_PROMPT_FIRST, TIE_PROMPT_SECOND, TIE_PROMPT_DELETE, TIE_PROMPT_CHANGE,
+} from './edit.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
@@ -238,8 +241,13 @@ export class Shell {
 
   /** What the status line should show right now. */
   statusLine() {
-    if (this.editMode && this.editOp === 'Tie') {
-      return this.status || TIE_PROMPT;
+    if (this.editMode && this.editOp) {
+      if (this.status) return this.status;
+      if (this.editOp === 'Tie') {
+        return this.tieFrom === null ? TIE_PROMPT_FIRST : TIE_PROMPT_SECOND;
+      }
+      if (this.editOp === 'TieRemove') return TIE_PROMPT_DELETE;
+      if (this.editOp === 'TieChange') return TIE_PROMPT_CHANGE;
     }
     if (this.quantities) return 'Quantities summary      Right/DEL or ESC to exit';
     if (this.contour) {
@@ -474,6 +482,22 @@ export class Shell {
       }
     }
 
+    // --- edit: remove or change an existing tie ---
+    if (this.editMode && (this.editOp === 'TieRemove' || this.editOp === 'TieChange')
+        && inPlot(px, py)) {
+      const t = this.view.transform();
+      // Tolerance in metres, from a fixed pixel reach, so picking feels the
+      // same at every zoom.
+      const idx = pickTie(this.plan, t.toE(px), t.toN(py), 8 / t.scale);
+      if (idx < 0) { this.status = ''; this.onChange(); return; }
+      if (this.editOp === 'TieRemove') removeTie(this.plan, idx);
+      else changeTieType(this.plan, idx, this.armedSlot + 1);
+      this.status = '';
+      this.recompute();
+      this.onChange();
+      return;
+    }
+
     // --- edit: pick holes to tie ---
     if (this.editMode && this.editOp === 'Tie' && inPlot(px, py)) {
       const t = this.view.transform();
@@ -685,15 +709,18 @@ export class Shell {
       this.close();
       return;
     }
-    if (this.editMode && item.label === 'Tie' && parent === 'Add') {
-      this.editOp = 'Tie';
-      this.tieFrom = null;
-      // Arm the first defined surface product so a click does something even
-      // before the user picks one.
-      if (this.armedSlot < 0) this.armedSlot = 0;
-      this.status = '';
-      this.close();
-      return;
+    if (this.editMode && item.label === 'Tie' && parent) {
+      // Add, Remove and Change all offer "Tie"; the parent decides which.
+      const op = { Add: 'Tie', Remove: 'TieRemove', Change: 'TieChange' }[parent];
+      if (op) {
+        this.editOp = op;
+        this.tieFrom = null;
+        // Arm the first product so a click does something before one is picked.
+        if (this.armedSlot < 0) this.armedSlot = 0;
+        this.status = '';
+        this.close();
+        return;
+      }
     }
 
     // --- Files menu -------------------------------------------------------
