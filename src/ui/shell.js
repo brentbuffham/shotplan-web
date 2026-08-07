@@ -300,6 +300,29 @@ export class Shell {
     return items?.[this.openSub]?.label ?? null;
   }
 
+  /**
+   * Switch to edit mode. Clicking Edit IS the switch - it opens no dropdown,
+   * the whole menu bar is replaced. Checked against v3.0.
+   */
+  enterEditMode() {
+    this.editMode = true;
+    this.editOp = null;
+    if (this.armedSlot < 0) this.armedSlot = 0;
+    this.tieFrom = null;
+    this.openMenu = -1;
+    this.openSub = -1;
+    this.status = '';
+    this.onChange();
+  }
+
+  exitEditMode() {
+    this.editMode = false;
+    this.editOp = null;
+    this.tieFrom = null;
+    this.status = '';
+    this.close();
+  }
+
   /** The active menu bar - edit mode replaces it wholesale. */
   get menus() {
     return this.editMode ? EDIT_MENUS : MENUS;
@@ -445,6 +468,7 @@ export class Shell {
   leftClick(px, py) {
     const bar = this.hitMenuBar(px, py);
     if (bar >= 0) {
+      if (this.menus[bar].entersEditMode) { this.enterEditMode(); return; }
       this.openMenu = this.openMenu === bar ? -1 : bar;
       this.hoverItem = -1;
       this.openSub = -1;
@@ -601,7 +625,10 @@ export class Shell {
     const upper = k.toUpperCase();
     if (this.openMenu < 0) {
       const i = this.menus.findIndex((m) => m.label[m.hot].toUpperCase() === upper);
-      if (i >= 0) { this.openMenu = i; this.onChange(); }
+      if (i < 0) return;
+      if (this.menus[i].entersEditMode) { this.enterEditMode(); return; }
+      this.openMenu = i;
+      this.onChange();
       return;
     }
     // If a submenu is open, keys resolve against it first.
@@ -690,25 +717,7 @@ export class Shell {
         return;
     }
     // --- Edit mode --------------------------------------------------------
-    // Choosing anything from the Edit menu enters edit mode, which replaces
-    // the whole menu bar rather than showing a mode indicator somewhere.
-    if (menuLabel === 'Edit' && !this.editMode) {
-      this.editMode = true;
-      this.editOp = null;
-      this.armedSlot = -1;
-      this.tieFrom = null;
-      // Deliberately does NOT clear openMenu/openSub here - the chosen item
-      // still has to run, and close() will clear them when it does.
-    }
-    if (item.label === 'Exit EDIT') {
-      this.editMode = false;
-      this.editOp = null;
-      this.armedSlot = -1;
-      this.tieFrom = null;
-      this.status = '';
-      this.close();
-      return;
-    }
+    if (item.label === 'Exit EDIT') { this.exitEditMode(); return; }
     if (this.editMode && item.label === 'Tie' && parent) {
       // Add, Remove and Change all offer "Tie"; the parent decides which.
       const op = { Add: 'Tie', Remove: 'TieRemove', Change: 'TieChange' }[parent];

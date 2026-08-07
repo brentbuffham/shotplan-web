@@ -24,29 +24,10 @@ export const MENUS = [
     ],
   },
   {
-    label: 'Edit', hot: 0, // 0x21A0B — hotkeys ARCSWDZE
-    items: [
-      {
-        label: 'Add', hot: 0, // 0x20F99 — HPFBDTLX
-        items: ['Hole', 'Pattern', 'Fill-in', 'Bench', 'Dummy hole', 'Tie', 'Lead-in', 'Text', 'Boundary'],
-      },
-      {
-        label: 'Remove', hot: 0, // 0x2101B — HBTLX
-        items: ['Holes', 'Bench', 'Tie', 'Lead-in', 'Text', 'Boundary'],
-      },
-      {
-        label: 'Change', hot: 0, // 0x2106E — PHBITLCX
-        items: ['Positions of Holes', 'Hole data', 'Bench', 'In-hole delay', 'Tie', 'Lead-in', 'Coordinates', 'Text', 'Boundary'],
-      },
-      { label: 'Show', hot: 0 },
-      {
-        label: 'Window', hot: 0, // 0x21297 — OZEC
-        items: ['Overview', 'Zoom', 'Expand', 'Contract'],
-      },
-      { label: 'Data', hot: 0 },
-      { label: 'Digitize', hot: 0 },
-      { label: 'Exit EDIT', hot: 0 },
-    ],
+    // Edit opens no dropdown. Clicking it IS the mode switch - the whole menu
+    // bar is replaced by EDIT_MENUS. Checked against v3.0; an Edit dropdown
+    // listing Add/Remove/Change was a reconstruction, not the program.
+    label: 'Edit', hot: 0, entersEditMode: true,
   },
   {
     label: 'Calculations', hot: 0, // 0x0A4B — VOTARQME
