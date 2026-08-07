@@ -72,6 +72,10 @@ function render() {
   }
   drawScreen(screen, shell.plan, filename, {
     ...shell.toggles,
+    // Label callbacks: the plan renderer should not need to know how firing
+    // times are computed, only how to ask for one.
+    fireTimeOf: (h) => shell.times?.fire.get(h.index + 1),
+    inholeDelayOf: (h) => shell.inholeDelayOf(h),
     activeMenu: shell.openMenu,
     status: shell.statusLine(),
     transform: shell.view.transform(),
@@ -122,7 +126,7 @@ async function boot() {
     // ?plan=NAME.XEL loads any plan sitting in samples/, which makes it easy
     // to exercise a calculation against a production pattern rather than the
     // small test one.
-    const want = new URLSearchParams(location.search).get('plan') ?? 'TEST3.XEL';
+    const want = new URLSearchParams(location.search).get('plan') ?? 'TEST4.XEL';
     const res = await fetch('/samples/' + want);
     if (res.ok) {
       const buf = new Uint8Array(await res.arrayBuffer());

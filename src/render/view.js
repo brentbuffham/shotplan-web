@@ -8,7 +8,7 @@
  */
 import {
   WIDTH, HEIGHT, BLACK, BLUE, CYAN, WHITE, YELLOW, LIGHTGREEN, LIGHTCYAN,
-  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED, LIGHTBLUE,
+  LIGHTMAGENTA, LIGHTGREY, DARKGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED, LIGHTBLUE,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 import { BURST, BURST_W, BURST_H } from './burst-sprite.js';
@@ -198,6 +198,27 @@ export function drawPlan(s, plan, opts = {}) {
 
   s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
 
+  // --- gridlines ---
+  // A survey grid with its coordinates labelled, as v3.0 draws in edit mode.
+  // The step is chosen so lines stay far enough apart to read.
+  if (show.gridlines) {
+    const spanE = t.toE ? t.toE(PLOT.x1) - t.toE(PLOT.x0) : 100;
+    const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
+    const step = nice.find((v) => v * t.scale >= 60) ?? 1000;
+    const e0 = Math.ceil((t.toE ? t.toE(PLOT.x0) : 0) / step) * step;
+    const n0 = Math.ceil((t.toN ? t.toN(PLOT.y1) : 0) / step) * step;
+    for (let e = e0; t.x(e) <= PLOT.x1; e += step) {
+      const x = t.x(e);
+      for (let y = PLOT.y0; y <= PLOT.y1; y += 3) s.px(x, y, DARKGREY);
+      s.text(String(Math.round(e)), x + 2, PLOT.y1 - 16, DARKGREY);
+    }
+    for (let n = n0; t.y(n) >= PLOT.y0; n += step) {
+      const y = t.y(n);
+      for (let x = PLOT.x0; x <= PLOT.x1; x += 3) s.px(x, y, DARKGREY);
+      s.text(String(Math.round(n)), PLOT.x0 + 2, y - 16, DARKGREY);
+    }
+  }
+
   // --- boundary polygon ---
   if (show.boundary && plan.boundary.length > 1) {
     for (let i = 0; i < plan.boundary.length; i++) {
@@ -262,6 +283,60 @@ export function drawPlan(s, plan, opts = {}) {
     } else {
       s.fillCircle(x, y, r, BLACK);
       s.circle(x, y, r, WHITE);
+    }
+  }
+
+  // --- hole tracks ---
+  // The trace from collar to toe.
+  //
+  // `angle` is inclination where 90 is vertical, so a hole at 102 leans 12
+  // degrees past vertical along its bearing and the horizontal run is
+  // depth * sin(angle - 90). Using cos(angle) gives the right magnitude but
+  // the wrong sign, putting the toe behind the collar - TEST4's holes are at
+  // 102 degrees bearing east, and v3.0 draws their tracks running east.
+  //
+  // At the 89 degrees most patterns use the run is a few centimetres, which is
+  // why the original only shows this when asked.
+  if (show.holeTracks) {
+    for (const h of liveHoles(plan)) {
+      if (h.e === null || !h.depth) continue;
+      const run = h.depth * Math.sin(((h.angle - 90) * Math.PI) / 180);
+      const te = h.e + run * Math.sin(h.bearing);
+      const tn = h.n + run * Math.cos(h.bearing);
+      // Dotted, as v3.0 draws them - a solid line reads as a tie.
+      dottedPath(s, [{ x: t.x(h.e), y: t.y(h.n) }, { x: t.x(te), y: t.y(tn) }],
+                 LIGHTGREY, 2);
+    }
+  }
+
+  // --- per-hole labels ---
+  //
+  // v3.0 stacks these around the collar: in-hole delay and nominal firing time
+  // above, depth and diameter below.
+  //
+  // Suppressed when the holes are closer together than the labels are wide.
+  // This is a deliberate departure: the original draws them at any zoom, and on
+  // a 200-hole plan viewed as an overview that is an unreadable mat of
+  // overlapping digits. You would zoom in before turning them on, so the
+  // outcome is the same - but a toggle that produces mush is worse than one
+  // that waits until it can tell you something.
+  const spacing = plan.defaults?.spacing || 3;
+  const roomForLabels = t.scale * spacing >= 45;
+  if (roomForLabels && (show.nomTimes || show.inholeDelay || show.depthDia)) {
+    for (const h of liveHoles(plan)) {
+      if (h.e === null) continue;
+      const x = t.x(h.e), y = t.y(h.n);
+      if (show.inholeDelay) {
+        const d = opts.inholeDelayOf?.(h);
+        if (d !== undefined && d !== null) s.text(String(Math.round(d)), x - 30, y - 16, LIGHTGREY);
+      }
+      if (show.nomTimes) {
+        const ft = opts.fireTimeOf?.(h);
+        if (ft !== undefined && ft !== null) s.text(String(Math.round(ft)), x + 5, y - 16, LIGHTCYAN);
+      }
+      if (show.depthDia) {
+        s.text(h.depth.toFixed(1), x - 8, y + 6, LIGHTGREY);
+      }
     }
   }
 

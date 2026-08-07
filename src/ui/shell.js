@@ -210,6 +210,22 @@ export class Shell {
     this.recompute();
   }
 
+  /**
+   * The nominal delay of a hole's in-hole detonator, for the Inhole delay
+   * label. Needs the delay database; without one there is nothing to show.
+   */
+  inholeDelayOf(hole) {
+    if (!this.delayDb || !this.plan) return null;
+    const inHole = this.plan.detonators.filter((d) => d.kind === 'in-hole');
+    const slot = inHole[hole.delay - 1];
+    if (!slot || !slot.defined) return null;
+    const want = slot.description.replace(/\s+/g, ' ').trim().toUpperCase();
+    const hit = this.delayDb.detonators.find(
+      (d) => d.name && want.startsWith(d.name.replace(/\s+/g, ' ').trim().toUpperCase())
+    );
+    return hit ? hit.nominal : null;
+  }
+
   /** What the status line should show right now. */
   statusLine() {
     if (this.contour) {
