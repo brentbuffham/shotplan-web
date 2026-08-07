@@ -118,43 +118,41 @@ export function contours(field, step) {
 }
 
 /**
- * First movement direction at each hole.
+ * First movement, one vector per Delaunay TRIANGLE.
  *
- * Rock breaks toward relief — toward ground that has already fired and moved.
- * So movement follows the DESCENDING time gradient, -grad(T), which is also
- * what v3.0's capture shows: contours rising to the north-east and every arrow
- * pointing south-west.
+ * The original places a block arrow in the gaps *between* holes, not on them,
+ * and that is the natural home for this quantity: a triangle's three
+ * (x, y, time) points define a plane, and that plane has a single exact
+ * gradient. No estimation, no smoothing, no choice of neighbourhood — the
+ * answer is determined by the three holes bounding the ground the arrow sits
+ * on, which is also the ground that actually moves.
  *
- * The gradient is estimated per hole from its triangulation neighbours by
- * least squares on the plane through them, which is stable on the irregular
- * point sets real patterns produce.
+ * Rock breaks toward relief — toward ground that has already fired and moved —
+ * so movement follows the DESCENDING gradient, -grad(T). v3.0's captures agree:
+ * contours rising north-east, every arrow pointing south-west.
+ *
+ * @returns {Array<{x, y, dx, dy, gradient}>}  centroid, unit direction, ms/m
  */
 export function firstMovement(field) {
   const { pts, vals, triangles } = field;
-  const nbr = pts.map(() => new Set());
-  for (const [a, b, c] of triangles) {
-    nbr[a].add(b); nbr[a].add(c);
-    nbr[b].add(a); nbr[b].add(c);
-    nbr[c].add(a); nbr[c].add(b);
-  }
   const out = [];
-  for (let i = 0; i < pts.length; i++) {
-    // Fit dT ~ gx*dx + gy*dy over the neighbours (normal equations).
-    let sxx = 0, sxy = 0, syy = 0, sxv = 0, syv = 0;
-    for (const j of nbr[i]) {
-      const dx = pts[j].x - pts[i].x;
-      const dy = pts[j].y - pts[i].y;
-      const dv = vals[j] - vals[i];
-      sxx += dx * dx; sxy += dx * dy; syy += dy * dy;
-      sxv += dx * dv; syv += dy * dv;
-    }
-    const det = sxx * syy - sxy * sxy;
-    if (Math.abs(det) < 1e-9) { out.push(null); continue; }
-    const gx = (sxv * syy - syv * sxy) / det;
-    const gy = (syv * sxx - sxv * sxy) / det;
+  for (const [a, b, c] of triangles) {
+    const x0 = pts[a].x, y0 = pts[a].y, v0 = vals[a];
+    const dx1 = pts[b].x - x0, dy1 = pts[b].y - y0, dv1 = vals[b] - v0;
+    const dx2 = pts[c].x - x0, dy2 = pts[c].y - y0, dv2 = vals[c] - v0;
+    const det = dx1 * dy2 - dx2 * dy1;
+    if (Math.abs(det) < 1e-9) continue;            // degenerate triangle
+    const gx = (dv1 * dy2 - dv2 * dy1) / det;
+    const gy = (dx1 * dv2 - dx2 * dv1) / det;
     const mag = Math.hypot(gx, gy);
-    // Movement is DOWN-gradient: negate.
-    out.push(mag < 1e-9 ? null : { x: -gx / mag, y: -gy / mag, gradient: mag });
+    if (mag < 1e-9) continue;                      // flat: no preferred direction
+    out.push({
+      x: (pts[a].x + pts[b].x + pts[c].x) / 3,
+      y: (pts[a].y + pts[b].y + pts[c].y) / 3,
+      dx: -gx / mag,
+      dy: -gy / mag,
+      gradient: mag,                               // ms per metre
+    });
   }
   return out;
 }

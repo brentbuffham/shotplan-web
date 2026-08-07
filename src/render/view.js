@@ -244,7 +244,7 @@ export function drawPlan(s, plan, opts = {}) {
   }
 
   // --- holes ---
-  const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  const r = Math.max(2, Math.min(3, Math.round(t.scale * 0.6)));
   // Dummy holes are drawn as a cross, not a circle — they occupy a position
   // but do not fire, and the original marks them distinctly for that reason.
   for (const h of dummyHoles(plan)) {
@@ -518,7 +518,7 @@ export function drawOverlap(s, plan, result, opts = {}) {
   }
 
   // Collars on top.
-  const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  const r = Math.max(2, Math.min(3, Math.round(t.scale * 0.6)));
   for (const h of result.holes) {
     if (h.e === null) continue;
     const x = t.x(h.e), y = t.y(h.n);
@@ -541,6 +541,27 @@ export function drawOverlap(s, plan, result, opts = {}) {
     s.hline(lx + 5, lx + 22, y + 7, BAND_COLOURS[i]);
     s.text(b.label, lx + 26, y, WHITE);
   });
+}
+
+/**
+ * A filled block arrow centred on (cx, cy), pointing along the unit vector
+ * (ux, uy), `len` pixels long. Drawn as one convex polygon: a shaft that
+ * widens into a head.
+ */
+function blockArrow(s, cx, cy, ux, uy, len, colour) {
+  const w = Math.max(2, Math.round(len * 0.16));   // half-width of the shaft
+  const hw = Math.max(4, Math.round(len * 0.34));  // half-width of the head
+  const hx = len * 0.25;                           // where the head starts
+  const px = -uy, py = ux;                         // perpendicular
+  const at = (along, across) => ({
+    x: cx + ux * along + px * across,
+    y: cy + uy * along + py * across,
+  });
+  s.fillPoly([
+    at(-len / 2, -w), at(hx, -w), at(hx, -hw),
+    at(len / 2, 0),
+    at(hx, hw), at(hx, w), at(-len / 2, w),
+  ], colour);
 }
 
 /** Dotted polyline, as v3.0 draws contours. */
@@ -585,7 +606,7 @@ export function drawContours(s, plan, field, opts = {}) {
     }
   }
 
-  const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  const r = Math.max(2, Math.min(3, Math.round(t.scale * 0.6)));
   for (const h of field.holes) {
     const x = t.x(h.e), y = t.y(h.n);
     s.fillCircle(x, y, r, BLACK);
@@ -594,23 +615,14 @@ export function drawContours(s, plan, field, opts = {}) {
 
   let step = 0;
   if (opts.mode === 'First Movement') {
-    const dirs = firstMovement(field);
-    // Arrow length in pixels, clamped so dense patterns stay legible.
-    const L = Math.max(6, Math.min(16, Math.round(t.scale * 1.6)));
-    dirs.forEach((d, i) => {
-      if (!d) return;
-      const h = field.holes[i];
-      // Screen y is inverted relative to northing.
-      const cx = t.x(h.e), cy = t.y(h.n);
-      const ex = Math.round(cx + d.x * L), ey = Math.round(cy - d.y * L);
-      s.line(cx, cy, ex, ey, YELLOW);
-      // Barbs.
-      const ux = (ex - cx) / L, uy = (ey - cy) / L;
-      for (const sg of [1, -1]) {
-        s.line(ex, ey, Math.round(ex - ux * 5 - uy * 4 * sg),
-               Math.round(ey - uy * 5 + ux * 4 * sg), YELLOW);
-      }
-    });
+    // One block arrow per triangle, sitting in the gap between the three
+    // holes that determine it — which is also the ground that moves.
+    const arrows = firstMovement(field);
+    const L = Math.max(9, Math.min(22, Math.round(t.scale * 2.2)));
+    for (const a of arrows) {
+      // Screen y is inverted relative to northing, so flip dy.
+      blockArrow(s, t.x(a.x), t.y(a.y), a.dx, -a.dy, L, YELLOW);
+    }
   } else {
     const c = contours(field, opts.step);
     step = c.step;
