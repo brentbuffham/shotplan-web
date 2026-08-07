@@ -147,7 +147,7 @@ export class Shell {
    * Both read the MEAN firing-time field, not the nominal one - v3.0 captions
    * the plot "Contours of mean hole firing times".
    */
-  startContours(mode) {
+  startContours(mode, sub = 'Display') {
     if (!this.times) {
       this.status = 'Error: This calculation requires an up-to-date database.';
       this.close();
@@ -160,7 +160,7 @@ export class Shell {
       this.close();
       return;
     }
-    this.contour = { mode, field, step: 0 };
+    this.contour = { mode, sub, field, step: 0, cursor: null };
     this.status = '';
     this.close();
   }
@@ -238,7 +238,13 @@ export class Shell {
         return 'Arrows show direction of first movement based on timing contours.';
       }
       if (this.contour.mode === 'Relief') {
-        return 'Relief in milliseconds per metre between adjacent holes';
+        if (this.contour.sub !== 'Explore') {
+          return 'Relief in milliseconds per metre between adjacent holes';
+        }
+        const r = this.contour.reliefAt;
+        return r === null || r === undefined
+          ? 'Left/INS to change display position for burden relief or right/DEL to exit'
+          : `Burden relief ${r.toFixed(1)} ms/m at this position`;
       }
       return `Contours of mean hole firing times are shown in steps of ${this.contour.step} ms`;
     }
@@ -354,6 +360,11 @@ export class Shell {
 
   mouseMove(px, py) {
     let changed = false;
+    if (this.contour && this.contour.mode === 'Relief' && this.contour.sub === 'Explore') {
+      this.contour.cursor = { x: px, y: py };
+      this.onChange();
+      if (this.openMenu < 0) return;
+    }
     if (this.envelope) {
       if (this.envelope.mode === 'Explore' && this.envelope.cursorX !== px) {
         this.envelope.cursorX = px;
@@ -540,7 +551,13 @@ export class Shell {
       return;
     }
     if (menuLabel === 'Calculations' && (item.label === 'Display' || item.label === 'Explore')) {
-      this.startEnvelope(item.label);
+      // Both Time Envelope and Relief offer Display|Explore, so the choice
+      // depends on which parent item is open, not on the label alone.
+      const parent = this.openSub >= 0
+        ? itemsOf(MENUS[this.openMenu])[this.openSub]?.label
+        : null;
+      if (parent === 'Relief') this.startContours('Relief', item.label);
+      else this.startEnvelope(item.label);
       return;
     }
     if (item.label === 'Out of sequence') { this.startOverlap('reversal'); return; }
@@ -548,7 +565,7 @@ export class Shell {
       this.startContours(item.label);
       return;
     }
-    if (item.label === 'Relief') { this.startContours('Relief'); return; }
+
     if (item.label === 'Quantities') {
       // Needs no timing and no product database - it counts holes and adds up
       // lengths, which is why v3.0 keeps it available when nothing else is.

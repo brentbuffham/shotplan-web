@@ -1,7 +1,7 @@
 import { Screen, mount } from './render/screen.js';
 import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
-import { demoPlan } from './demo-plan.js';
+import { DEMO_PLAN_XEL } from './format/demo-plan-data.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
 import { recoverKey, parseDelays } from './format/delays.js';
 import { demoDelayDb } from './format/demo-delays.js';
@@ -34,6 +34,8 @@ function render() {
     drawRelief(screen, shell.plan, shell.contour.field, {
       transform: shell.view.transform(),
       isOverview: shell.view.isOverview,
+      cursor: shell.contour.sub === 'Explore' ? shell.contour.cursor : null,
+      onSample: (v) => { shell.contour.reliefAt = v; },
     });
     drawMenuBar(screen, shell.openMenu);
     drawReliefLegend(screen);
@@ -154,7 +156,7 @@ async function boot() {
       return;
     }
   } catch { /* no local sample; fall through */ }
-  load(parseXel(demoPlan()), 'DEMO.XEL');
+  load(parseXel(DEMO_PLAN_XEL), 'DEMO.XEL');
 }
 
 const drop = document.getElementById('drop');

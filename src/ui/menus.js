@@ -60,7 +60,11 @@ export const MENUS = [
       { label: 'Overlap', hot: 0, items: ['Out of sequence', 'Crowding 80%'] }, // 0x0541
       { label: 'Time Envelope', hot: 0, items: ['Display', 'Explore'] },        // 0x055E
       { label: 'Angle of initiation', hot: 0, items: ['Contours', 'First Movement'] }, // 0x056E
-      { label: 'Relief', hot: 0 },
+      // Display|Explore at 0x055E is shared with Time Envelope rather than
+      // belonging to it. Relief has its own explore prompt at 0x15006:
+      // "Left/INS to change display position for burden relief or right/DEL
+      // to exit".
+      { label: 'Relief', hot: 0, items: ['Display', 'Explore'] },
       { label: 'Quantities', hot: 0 },
       { label: 'Misfires', hot: 0 },
     ],

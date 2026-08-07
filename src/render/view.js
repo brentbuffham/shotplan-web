@@ -713,13 +713,29 @@ export function drawRelief(s, plan, field, opts = {}) {
 
   // Each gradient carries its own triangle: degenerate ones are skipped, so
   // the arrays do not line up index-for-index.
+  const cursor = opts.cursor;
+  let under = null;
   for (const g of firstMovement(field)) {
     const band = RELIEF_BANDS.find((r) => g.gradient < r.max);
-    if (!band) continue;                        // above the top band: unfilled
     const poly = g.tri.map((i) => ({
       x: t.x(field.pts[i].x), y: t.y(field.pts[i].y),
     }));
-    s.hatchPoly(poly, band.colour);
+    if (band) s.hatchPoly(poly, band.colour);
+    // Explore: find the triangle the cursor sits in and report its relief.
+    if (cursor && under === null && pointInTriangle(cursor, poly)) {
+      under = { g, poly, band };
+    }
+  }
+  if (under) {
+    // Outline the sampled triangle so it is obvious which one is being read.
+    const p = under.poly;
+    for (let i = 0; i < 3; i++) {
+      const a = p[i], b = p[(i + 1) % 3];
+      s.line(a.x, a.y, b.x, b.y, WHITE);
+    }
+    opts.onSample?.(under.g.gradient);
+  } else {
+    opts.onSample?.(null);
   }
 
   for (const bench of plan.benches) {
@@ -777,6 +793,15 @@ export function drawQuantities(s, plan) {
   L(row + 2, '  TOTAL'.padEnd(24) + ' '.padStart(7)
     + `${q.totalLength.toFixed(1)} m`.padStart(14)
     + `${q.totalRequired} metres required`.padStart(28), YELLOW);
+}
+
+/** Barycentric point-in-triangle, for picking a relief cell. */
+function pointInTriangle(p, [a, b, c]) {
+  const d = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+  if (Math.abs(d) < 1e-9) return false;
+  const u = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / d;
+  const v = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / d;
+  return u >= 0 && v >= 0 && u + v <= 1;
 }
 
 /** Dotted polyline, as v3.0 draws contours. */
