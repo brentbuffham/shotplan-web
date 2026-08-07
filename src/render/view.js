@@ -564,6 +564,87 @@ function blockArrow(s, cx, cy, ux, uy, len, colour) {
   ], colour);
 }
 
+/**
+ * Relief bands, ms per metre.
+ *
+ * Read off v3.0's legend strip: `Relief ms/m 10.< <15. <20. <25. <30. <35.`
+ * The quantity is the magnitude of the timing gradient across each triangle -
+ * how many milliseconds separate holes a metre apart. Low relief means the
+ * next row gets little time to move before its neighbour fires.
+ *
+ * Colours are taken from the legend swatches. The topmost band (above 35) is
+ * not in the legend and is left unfilled, as the original appears to.
+ */
+export const RELIEF_BANDS = [
+  { max: 10, colour: LIGHTGREY, label: '10.<' },
+  { max: 15, colour: MAGENTA, label: '<15.' },
+  { max: 20, colour: LIGHTBLUE, label: '<20.' },
+  { max: 25, colour: CYAN, label: '<25.' },
+  { max: 30, colour: GREEN, label: '<30.' },
+  { max: 35, colour: YELLOW, label: '<35.' },
+];
+
+/** Relief legend, drawn across the strip the detonator bar normally occupies. */
+export function drawReliefLegend(s) {
+  s.fillRect(0, 16, WIDTH - 1, 31, BLUE);
+  s.text('Relief ms/m', 0, 16, WHITE, BLUE);
+  let x = 12 * 8;
+  for (const b of RELIEF_BANDS) {
+    s.fillRect(x, 20, x + 10, 28, b.colour);
+    s.text(b.label, x + 14, 16, WHITE, BLUE);
+    x += 9 * 8;
+  }
+}
+
+/**
+ * Calculations > Relief.
+ *
+ * Each triangle is hatched in the colour of its relief band. Hatching rather
+ * than flooding keeps the collars and bench lines visible through the fill,
+ * which on 16 colours a solid fill would bury.
+ */
+export function drawRelief(s, plan, field, opts = {}) {
+  const t = opts.transform ?? fitTransform(planBounds(plan));
+  const overview = opts.isOverview !== false;
+  s.clear(overview ? CYAN : BLUE);
+  s.fillRect(FRAME.x0, FRAME.y0, FRAME.x1, FRAME.y1, WHITE);
+  s.fillRect(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1, BLACK);
+  if (!plan || !t || !field) return;
+
+  s.setClip(PLOT.x0, PLOT.y0, PLOT.x1, PLOT.y1);
+
+  // Each gradient carries its own triangle: degenerate ones are skipped, so
+  // the arrays do not line up index-for-index.
+  for (const g of firstMovement(field)) {
+    const band = RELIEF_BANDS.find((r) => g.gradient < r.max);
+    if (!band) continue;                        // above the top band: unfilled
+    const poly = g.tri.map((i) => ({
+      x: t.x(field.pts[i].x), y: t.y(field.pts[i].y),
+    }));
+    s.hatchPoly(poly, band.colour);
+  }
+
+  for (const bench of plan.benches) {
+    for (const pts of [bench.crest, bench.foot]) {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const p = pts[i], q = pts[i + 1];
+        if (p.e === null || q.e === null) continue;
+        s.line(t.x(p.e), t.y(p.n), t.x(q.e), t.y(q.n), GREEN);
+      }
+    }
+  }
+
+  const r = Math.max(2, Math.min(3, Math.round(t.scale * 0.6)));
+  for (const h of field.holes) {
+    const x = t.x(h.e), y = t.y(h.n);
+    s.fillCircle(x, y, r, BLACK);
+    s.circle(x, y, r, WHITE);
+  }
+
+  drawScaleBar(s, t);
+  s.resetClip();
+}
+
 /** Dotted polyline, as v3.0 draws contours. */
 function dottedPath(s, pts, colour, every = 3) {
   let n = 0;
@@ -618,7 +699,7 @@ export function drawContours(s, plan, field, opts = {}) {
     // One block arrow per triangle, sitting in the gap between the three
     // holes that determine it — which is also the ground that moves.
     const arrows = firstMovement(field);
-    const L = Math.max(9, Math.min(22, Math.round(t.scale * 2.2)));
+    const L = Math.max(5, Math.min(11, Math.round(t.scale * 1.1)));
     for (const a of arrows) {
       // Screen y is inverted relative to northing, so flip dy.
       blockArrow(s, t.x(a.x), t.y(a.y), a.dx, -a.dy, L, YELLOW);

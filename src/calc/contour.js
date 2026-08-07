@@ -131,7 +131,11 @@ export function contours(field, step) {
  * so movement follows the DESCENDING gradient, -grad(T). v3.0's captures agree:
  * contours rising north-east, every arrow pointing south-west.
  *
- * @returns {Array<{x, y, dx, dy, gradient}>}  centroid, unit direction, ms/m
+ * Each entry carries the triangle it came from, because degenerate triangles
+ * are skipped and a caller must not assume the result lines up index-for-index
+ * with `field.triangles`.
+ *
+ * @returns {Array<{tri, x, y, dx, dy, gradient}>}  centroid, unit direction, ms/m
  */
 export function firstMovement(field) {
   const { pts, vals, triangles } = field;
@@ -147,6 +151,7 @@ export function firstMovement(field) {
     const mag = Math.hypot(gx, gy);
     if (mag < 1e-9) continue;                      // flat: no preferred direction
     out.push({
+      tri: [a, b, c],
       x: (pts[a].x + pts[b].x + pts[c].x) / 3,
       y: (pts[a].y + pts[b].y + pts[c].y) / 3,
       dx: -gx / mag,

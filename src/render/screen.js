@@ -191,6 +191,40 @@ export class Screen {
   }
 
   /**
+   * Convex polygon filled with a 45-degree hatch rather than solid.
+   *
+   * The original hatches its relief bands instead of flooding them, which
+   * keeps the holes and the bench lines readable through the fill — on a
+   * 16-colour display a solid fill would bury them.
+   */
+  hatchPoly(pts, c, step = 4) {
+    let minY = Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    minY = Math.max(Math.ceil(minY), this.clipTop);
+    maxY = Math.min(Math.floor(maxY), this.clipBottom);
+    for (let y = minY; y <= maxY; y++) {
+      const xs = [];
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[j], b = pts[i];
+        if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) {
+          xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+        }
+      }
+      if (xs.length < 2) continue;
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        const x0 = Math.round(xs[k]), x1 = Math.round(xs[k + 1]);
+        for (let x = x0; x <= x1; x++) {
+          if (((x + y) % step + step) % step === 0) this.px(x, y, c);
+        }
+      }
+    }
+  }
+
+  /**
    * Draw one codepage-437 glyph at pixel position.
    * `bg` of -1 leaves background pixels untouched (transparent text).
    */

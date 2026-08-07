@@ -214,9 +214,13 @@ export class Shell {
   statusLine() {
     if (this.contour) {
       // Both captions verbatim from SHOTPLAN.OVR (0x18037, 0x15D54).
-      return this.contour.mode === 'First Movement'
-        ? 'Arrows show direction of first movement based on timing contours.'
-        : `Contours of mean hole firing times are shown in steps of ${this.contour.step} ms`;
+      if (this.contour.mode === 'First Movement') {
+        return 'Arrows show direction of first movement based on timing contours.';
+      }
+      if (this.contour.mode === 'Relief') {
+        return 'Relief in milliseconds per metre between adjacent holes';
+      }
+      return `Contours of mean hole firing times are shown in steps of ${this.contour.step} ms`;
     }
     if (this.overlap) {
       // Both captions are verbatim from SHOTPLAN.OVR @0xBB5A.
@@ -522,6 +526,7 @@ export class Shell {
       this.startContours(item.label);
       return;
     }
+    if (item.label === 'Relief') { this.startContours('Relief'); return; }
     if (item.label === 'Crowding 80%') { this.startOverlap('crowding'); return; }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.
     switch (item.label) {
