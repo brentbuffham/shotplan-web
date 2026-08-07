@@ -33,7 +33,37 @@ function render() {
 
 shell.onChange = render;
 attachInput(canvas, shell);
-load(parseXel(demoPlan()), 'DEMO.XEL');
+
+/**
+ * Read a .XEL as cp437/latin1. These files are not UTF-8, and decoding them
+ * as such corrupts any byte above 0x7F.
+ */
+function decodeXel(buf) {
+  let text = '';
+  for (let i = 0; i < buf.length; i++) text += String.fromCharCode(buf[i]);
+  return text;
+}
+
+/**
+ * Prefer a real plan from samples/ for side-by-side comparison against v3.0
+ * running under DOSBox. That directory is gitignored — the sample plans embed
+ * a third party's product database — so fall back to a generated plan, which
+ * is what anyone cloning this repository will see.
+ */
+async function boot() {
+  try {
+    const res = await fetch('/samples/TEST3.XEL');
+    if (res.ok) {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      load(parseXel(decodeXel(buf)), 'TEST3.XEL');
+      drop.textContent = `TEST3.XEL — ${shell.plan.holes.length} records, ${shell.plan.links.length} ties`;
+      return;
+    }
+  } catch { /* no local sample; fall through */ }
+  load(parseXel(demoPlan()), 'DEMO.XEL');
+}
+
+const drop = document.getElementById('drop');
 
 // --- integer scaling -------------------------------------------------------
 const scaleSel = document.getElementById('scale');
@@ -42,7 +72,6 @@ scaleSel.addEventListener('change', applyScale);
 applyScale();
 
 // --- drop a real .XEL to load it ------------------------------------------
-const drop = document.getElementById('drop');
 document.addEventListener('dragover', (e) => {
   e.preventDefault();
   drop.classList.add('over');
@@ -54,11 +83,8 @@ document.addEventListener('drop', async (e) => {
   const file = e.dataTransfer?.files?.[0];
   if (!file) return;
   try {
-    // .XEL is cp437/latin1, not UTF-8.
     const buf = new Uint8Array(await file.arrayBuffer());
-    let text = '';
-    for (let i = 0; i < buf.length; i++) text += String.fromCharCode(buf[i]);
-    const plan = parseXel(text);
+    const plan = parseXel(decodeXel(buf));
     load(plan, file.name.toUpperCase());
     drop.textContent = `${filename} — ${plan.holes.length} records, ${plan.links.length} ties`;
   } catch (err) {
@@ -66,3 +92,5 @@ document.addEventListener('drop', async (e) => {
     console.error(err);
   }
 });
+
+boot();

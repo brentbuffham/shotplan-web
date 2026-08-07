@@ -95,6 +95,15 @@ export function drawStatusBar(s, filename, title, status) {
  * below the detonator bar) and ends around y=440, leaving a cyan band above
  * the status line.
  */
+/**
+ * Per-detonator-type colours, shared by the tie lines and the detonator bar
+ * slots that preview them. Indexed by a link's `type` field.
+ * Provisional beyond type 4, which is confirmed magenta from TEST3.XEL.
+ */
+export const TIE_COLOURS = [
+  WHITE, GREEN, YELLOW, LIGHTGREEN, LIGHTMAGENTA, LIGHTCYAN, BROWN, LIGHTGREY,
+];
+
 export const FRAME = { x0: 16, y0: 48, x1: WIDTH - 17, y1: 440 };
 const FRAME_THICKNESS = 3;
 
@@ -122,11 +131,12 @@ function drawScaleBar(s, t) {
   const y = PLOT.y1 - 10;
   const x1 = PLOT.x1 - 10;
   const x0 = x1 - w;
-  s.hline(x0, x1, y, WHITE);
-  s.vline(x0, y - 4, y + 4, WHITE);
-  s.vline(x1, y - 4, y + 4, WHITE);
+  // Yellow, as v3.0 draws it.
+  s.hline(x0, x1, y, YELLOW);
+  s.vline(x0, y - 4, y + 4, YELLOW);
+  s.vline(x1, y - 4, y + 4, YELLOW);
   const label = `${metres}m`;
-  s.text(label, x0 - label.length * 8 - 6, y - 7, WHITE);
+  s.text(label, x0 - label.length * 8 - 6, y - 7, YELLOW);
 }
 
 /**
@@ -199,21 +209,34 @@ export function drawPlan(s, plan, opts = {}) {
   }
 
   // --- surface ties ---
+  // Tie colour comes from the link's detonator type, not a fixed colour: each
+  // surface product draws in its own colour, which is what the detonator bar
+  // along the top is previewing. Confirmed on TEST3.XEL, where type-4 ties
+  // render magenta rather than the yellow seen on DHDETC.XEL.
   const byIndex = new Map(plan.holes.map((h) => [h.index + 1, h])); // links are 1-based
   if (show.ties && !show.collarsOnly) {
     for (const l of plan.links) {
       const a = byIndex.get(l.hole1);
       const b = byIndex.get(l.hole2);
       if (!a || !b || a.e === null || b.e === null) continue;
-      s.line(t.x(a.e), t.y(a.n), t.x(b.e), t.y(b.n), YELLOW);
+      const c = TIE_COLOURS[l.type % TIE_COLOURS.length];
+      const ax = t.x(a.e), ay = t.y(a.n), bx = t.x(b.e), by = t.y(b.n);
+      s.line(ax, ay, bx, by, c);
+      // Ties carry a direction arrow: the tie-up is directed, and which way a
+      // connector fires is the whole point of reading the plan.
+      arrowHead(s, ax, ay, bx, by, c);
     }
   }
 
   // --- holes ---
   const r = Math.max(2, Math.min(4, Math.round(t.scale * 0.9)));
+  // Dummy holes are drawn as a cross, not a circle — they occupy a position
+  // but do not fire, and the original marks them distinctly for that reason.
   for (const h of dummyHoles(plan)) {
     if (h.e === null) continue;
-    s.circle(t.x(h.e), t.y(h.n), r, LIGHTGREY);
+    const x = t.x(h.e), y = t.y(h.n);
+    s.line(x - r, y - r, x + r, y + r, WHITE);
+    s.line(x - r, y + r, x + r, y - r, WHITE);
   }
   for (const h of liveHoles(plan)) {
     if (h.e === null) continue;
@@ -222,11 +245,27 @@ export function drawPlan(s, plan, opts = {}) {
     s.circle(x, y, r, WHITE);
   }
 
+  // --- initiation point ---
+  // The tie-up is directed, so the starting hole is the one that is some
+  // link's source but never any link's target. Drawn as a filled magenta
+  // marker with its number, as v3.0 does.
+  if (show.ties) {
+    const targets = new Set(plan.links.map((l) => l.hole2));
+    const sources = [...new Set(plan.links.map((l) => l.hole1))].filter((h) => !targets.has(h));
+    sources.forEach((idx, k) => {
+      const h = byIndex.get(idx);
+      if (!h || h.e === null) return;
+      const x = t.x(h.e), y = t.y(h.n);
+      s.fillRect(x - 4, y + 4, x + 4, y + 15, MAGENTA);
+      s.text(String(k + 1), x - 3, y + 4, WHITE, MAGENTA);
+    });
+  }
+
   // --- text annotations ---
   if (show.texts) {
     for (const tx of plan.texts) {
       if (tx.e === null) continue;
-      s.text(tx.text, t.x(tx.e) + 4, t.y(tx.n) - 8, LIGHTCYAN);
+      s.text(tx.text, t.x(tx.e) + 4, t.y(tx.n) - 8, WHITE);
     }
   }
 
@@ -245,6 +284,26 @@ export function drawPlan(s, plan, opts = {}) {
 
   drawScaleBar(s, t);
   s.resetClip();
+}
+
+/**
+ * Arrowhead partway along a tie, pointing from (ax,ay) toward (bx,by).
+ * Placed at ~60% rather than the midpoint so it stays clear of the collar
+ * circles where several ties converge.
+ */
+function arrowHead(s, ax, ay, bx, by, c) {
+  const dx = bx - ax, dy = by - ay;
+  const len = Math.hypot(dx, dy);
+  if (len < 10) return;
+  const ux = dx / len, uy = dy / len;
+  const px = ax + dx * 0.6, py = ay + dy * 0.6;
+  const size = 4;
+  // Two barbs swept back from the tip.
+  for (const sgn of [1, -1]) {
+    const nx = -uy * sgn, ny = ux * sgn;
+    s.line(px, py, Math.round(px - ux * size + nx * size * 0.6),
+           Math.round(py - uy * size + ny * size * 0.6), c);
+  }
 }
 
 /** Marching-ant style rectangle for the zoom window. */

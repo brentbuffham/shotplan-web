@@ -59,12 +59,26 @@ export class Shell {
     this.readout = '';       // cursor position / hole data
   }
 
-  /** Called when a new plan is loaded. */
+  /**
+   * Called when a new plan is loaded.
+   *
+   * Display toggles are switched on for whatever the plan actually contains.
+   * v3.0 does this: loading DHDETC.XEL (holes and ties only) leaves everything
+   * but Ties off, while loading TEST3.XEL (which has a bench, a boundary and a
+   * text string) comes up with Bench, Boundary and Text strings all ON.
+   */
   setPlan(plan, bounds) {
     this.plan = plan;
     this.view.overview(bounds);
     this.highlight = null;
     this.readout = '';
+    this.toggles = { ...DEFAULT_TOGGLES };
+    if (plan) {
+      this.toggles.ties = plan.links.length > 0;
+      this.toggles.benches = plan.benches.length > 0;
+      this.toggles.boundary = plan.boundary.length > 0;
+      this.toggles.texts = plan.texts.length > 0;
+    }
   }
 
   /** What the status line should show right now. */
