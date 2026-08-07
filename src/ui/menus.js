@@ -51,9 +51,14 @@ export const MENUS = [
   {
     label: 'Calculations', hot: 0, // 0x0A4B — VOTARQME
     items: [
-      { label: 'Visualize', hot: 0, items: ['Display', 'Explore'] },       // 0x055E
+      // Playback speed, confirmed from a screenshot of v3.0's Calculations
+      // menu. The binary stores these submenu strings in the same order as
+      // their parent items, which makes the mapping unambiguous:
+      //   0x04F7 Slow|Medium|Fast   0x0541 Out of sequence|Crowding 80%
+      //   0x055E Display|Explore    0x056E Contours|First Movement
+      { label: 'Visualize', hot: 0, items: ['Slow', 'Medium', 'Fast'] },       // 0x04F7
       { label: 'Overlap', hot: 0, items: ['Out of sequence', 'Crowding 80%'] }, // 0x0541
-      { label: 'Time Envelope', hot: 0 },
+      { label: 'Time Envelope', hot: 0, items: ['Display', 'Explore'] },        // 0x055E
       { label: 'Angle of initiation', hot: 0, items: ['Contours', 'First Movement'] }, // 0x056E
       { label: 'Relief', hot: 0 },
       { label: 'Quantities', hot: 0 },

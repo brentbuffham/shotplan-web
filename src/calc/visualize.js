@@ -12,6 +12,16 @@
  * few hundred milliseconds, so it is played back heavily slowed by default.
  */
 
+/**
+ * Playback speeds, offered by v3.0 as Visualize > Slow|Medium|Fast
+ * (SHOTPLAN.OVR @0x04F7). Values are blast-milliseconds per real second.
+ *
+ * A real blast is over in under three seconds and all the interesting
+ * structure sits in the first few hundred milliseconds, so even "Fast" is
+ * heavily slowed relative to reality.
+ */
+export const SPEEDS = { Slow: 40, Medium: 120, Fast: 400 };
+
 /** Prompt line, verbatim from SHOTPLAN.OVR @0x12024. */
 export const VISUALIZE_PROMPT =
   'Press space bar to pause display or ESC to abort.';

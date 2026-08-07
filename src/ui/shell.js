@@ -16,7 +16,7 @@ import { PLOT } from '../render/view.js';
 import { MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
-import { Visualization, VISUALIZE_PROMPT } from '../calc/visualize.js';
+import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
 const ZOOM_PROMPT =
@@ -77,7 +77,7 @@ export class Shell {
       : null;
   }
 
-  startVisualize() {
+  startVisualize(speed = 'Medium') {
     if (!this.times) {
       this.status = 'Error: This calculation requires an up-to-date database.';
       this.close();
@@ -88,7 +88,7 @@ export class Shell {
       this.close();
       return;
     }
-    this.vis = new Visualization(this.times);
+    this.vis = new Visualization(this.times, SPEEDS[speed] ?? SPEEDS.Medium);
     this.status = '';
     this.close();
   }
@@ -357,10 +357,26 @@ export class Shell {
       if (i >= 0) { this.openMenu = i; this.onChange(); }
       return;
     }
+    // If a submenu is open, keys resolve against it first.
+    const sub = this.submenuBox();
+    if (sub) {
+      const j = sub.items.findIndex((it) => it.label[it.hot ?? 0]?.toUpperCase() === upper);
+      if (j >= 0) { this.activate(sub.items[j], MENUS[this.openMenu].label); return; }
+    }
     const box = this.dropdownBox();
     if (!box) return;
     const i = box.items.findIndex((it) => it.label[it.hot ?? 0]?.toUpperCase() === upper);
-    if (i >= 0) this.activate(box.items[i], MENUS[this.openMenu].label);
+    if (i < 0) return;
+    // An item with a submenu opens it rather than firing — the same as
+    // hovering it with the mouse.
+    if (itemsOf(box.items[i])) {
+      this.hoverItem = i;
+      this.openSub = i;
+      this.hoverSub = -1;
+      this.onChange();
+      return;
+    }
+    this.activate(box.items[i], MENUS[this.openMenu].label);
   }
 
   activate(item, menuLabel) {
@@ -375,8 +391,8 @@ export class Shell {
       this.onChange();
       return;
     }
-    if (item.label === 'Visualize' || item.label === 'Display') {
-      this.startVisualize();
+    if (menuLabel === 'Calculations' && SPEEDS[item.label] !== undefined) {
+      this.startVisualize(item.label);
       return;
     }
     // Navigation — the original's Window vocabulary, shared by Show and Edit.

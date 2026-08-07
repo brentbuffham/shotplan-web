@@ -8,7 +8,7 @@
  */
 import {
   WIDTH, HEIGHT, BLACK, BLUE, CYAN, WHITE, YELLOW, LIGHTGREEN, LIGHTCYAN,
-  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED,
+  LIGHTMAGENTA, LIGHTGREY, GREEN, MAGENTA, BROWN, RED, LIGHTRED,
 } from './screen.js';
 import { liveHoles, dummyHoles, planBounds } from '../format/xel.js';
 
@@ -301,7 +301,7 @@ export function drawPlan(s, plan, opts = {}) {
   // Elapsed-time counter, top right, as v3.0 shows during Visualize.
   if (opts.visualization) {
     const label = `${Math.round(opts.visualization.t)}ms`;
-    s.text(label, PLOT.x1 - label.length * 8 - 6, PLOT.y0 + 6, YELLOW);
+    s.text(label, PLOT.x1 - label.length * 8 - 6, PLOT.y0 + 6, WHITE);
   }
 
   drawScaleBar(s, t);
@@ -337,15 +337,23 @@ function arrowHead(s, ax, ay, bx, by, c) {
  * The burst flares briefly white then settles to yellow/red.
  */
 function burst(s, x, y, r, age) {
-  const fresh = age !== null && age < 25;
-  const arms = 8;
-  const len = fresh ? r + 5 : r + 3;
+  // A jagged star: alternating long and short arms, red at the tips through
+  // orange to a white-hot core. v3.0's bursts are big and stay lit, so the
+  // fired region reads as a solid advancing front rather than a sparkle.
+  const flash = age !== null && age < 20;
+  const long = r + (flash ? 11 : 9);
+  const short = r + 3;
+  const arms = 16;
   for (let i = 0; i < arms; i++) {
     const a = (i / arms) * Math.PI * 2;
-    const c = fresh ? WHITE : (i % 2 ? RED : YELLOW);
-    s.line(x, y, Math.round(x + Math.cos(a) * len), Math.round(y + Math.sin(a) * len), c);
+    const rad = i % 2 ? long : short;
+    s.line(x, y, Math.round(x + Math.cos(a) * rad),
+           Math.round(y + Math.sin(a) * rad), i % 2 ? LIGHTRED : RED);
   }
-  s.fillCircle(x, y, Math.max(1, r - 1), fresh ? WHITE : YELLOW);
+  // Body and core.
+  s.fillCircle(x, y, Math.max(2, r + 1), YELLOW);
+  s.fillCircle(x, y, Math.max(1, r - 1), flash ? WHITE : LIGHTRED);
+  if (!flash) s.fillCircle(x, y, Math.max(1, r - 2), WHITE);
 }
 
 /** Marching-ant style rectangle for the zoom window. */
