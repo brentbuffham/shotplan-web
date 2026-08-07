@@ -361,10 +361,12 @@ function drawItem(s, box, item, i, selected, shell) {
   const fg = selected ? BLACK : WHITE;
   s.fillRect(box.x + 1, y, box.x + box.w - 2, y + CELL_H - 1, bg);
   s.text(item.label, x, y, fg, bg);
-  // Hotkey letter, underlined, as the original draws it.
+  // Hotkeys are marked by UNDERLINE ONLY. The original does not recolour them
+  // inside dropdowns — checked against a screenshot of v3.0's Show menu, where
+  // every accelerator is the same white as its label. Colouring them yellow
+  // makes the menu read as far busier than the original.
   const hot = item.hot ?? 0;
-  s.glyph(item.label.charCodeAt(hot), x + hot * CELL_W, y, selected ? BLACK : YELLOW, bg);
-  s.hline(x + hot * CELL_W, x + hot * CELL_W + 7, y + 14, selected ? BLACK : YELLOW);
+  s.hline(x + hot * CELL_W, x + hot * CELL_W + 7, y + 14, fg);
   // Toggle state, right aligned in its own column.
   if (item.toggle) {
     const state = shell.toggles[item.toggle] ? ':ON ' : ':OFF';

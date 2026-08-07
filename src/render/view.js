@@ -38,12 +38,12 @@ export function drawMenuBar(s, active = -1) {
   let col = MENU_START;
   MENUS.forEach((m, i) => {
     const x = col * 8;
+    // The open menu's title turns yellow; the rest stay white. Hotkeys are
+    // marked by underline only, not by colour.
     const fg = i === active ? YELLOW : WHITE;
     s.text(m.label, x, 0, fg, BLUE);
-    // Hotkey: yellow, with the underline the original draws.
     const hx = x + m.hot * 8;
-    s.glyph(m.label.charCodeAt(m.hot), hx, 0, YELLOW, BLUE);
-    s.hline(hx, hx + 7, 14, YELLOW);
+    s.hline(hx, hx + 7, 14, fg);
     col += m.label.length + MENU_GAP;
   });
 }
