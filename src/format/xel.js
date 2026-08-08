@@ -141,11 +141,23 @@ export function parseXel(text) {
     patterns.push({
       nRows: int(p[0]),
       nInRow: int(p[1]),
-      type: int(p[2]),
-      unknown: int(p[3]),
-      spacing: num(p[4]),
+      type: int(p[2]),      // 1 = SQUARE, 2 = STAGGERED
+      // First hole RECORD of the pattern, 1-based. A pattern's holes occupy a
+      // contiguous run from here, which is how membership is recovered:
+      // COMPARE's pattern 3 says 51, and holes 51-100 are the ones carrying
+      // its id.
+      firstHole: int(p[3]),
+      // Field 5 is not identified. It equals the along-row spacing in DHDETC
+      // but is larger in COMPARE (6.71 against 6.00) and BORPURG (4.21 against
+      // 2.98) — close to a cell diagonal in those two, but not in DHDETC, so
+      // no rule fits all three. Kept under a neutral name rather than guessed.
+      field5: num(p[4]),
+      // Burden and spacing were MEASURED off the holes, not inferred from the
+      // column order: burden is perpendicular between rows, spacing is along
+      // the row. DHDETC stores 2.8 / 3.6 and its holes sit at 2.7942 / 3.5994,
+      // so the record is these values rounded to one decimal.
       burden: num(p[5]),
-      minDist: num(p[6]),
+      spacing: num(p[6]),
     });
   }
   const patternTable = { freeIndex: pf[0], selected: pf[1], patterns };
@@ -192,8 +204,18 @@ export function parseXel(text) {
   // Field 4 is a tri-state, not a type flag. Verified against the declared
   // blast-hole count in all ten sample plans:
   //
-  //    > 0   live blast hole. The value varies 1..7 between files and tracks
-  //          something per-hole (bench or product index) — not yet pinned down.
+  //    > 0   live blast hole, and the value is its **pattern id plus one**.
+  //          `kind === 1` means the hole belongs to no pattern — placed by
+  //          hand or imported.
+  //
+  //          Settled across all nine sample plans. COMPARE.XEL holds four
+  //          pattern records; its holes 1-50 carry kind 5 and pattern 4's
+  //          first-hole field is 1, while holes 51-100 carry kind 4 and
+  //          pattern 3's is 51. BORPURG's pattern 3 starts at hole 253 and
+  //          hole 253 carries kind 4. `max(kind)` equals the pattern table's
+  //          next-free index in every file, and holes of one kind occupy a
+  //          contiguous run of records, because a pattern is generated in one
+  //          go: COMPARE is exactly two runs of 50, OVERBUR four runs.
   //     0    dummy hole — occupies a record and a position but does not fire.
   //    < 0   deleted.
   //

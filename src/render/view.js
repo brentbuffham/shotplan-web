@@ -895,6 +895,29 @@ export function drawBenchPreview(s, t, points, pointer) {
   }
 }
 
+/**
+ * A pattern being placed, before it is committed.
+ *
+ * Drawn as open circles like real collars so the layout can be judged, plus a
+ * line along the first row showing the direction being picked. This is the
+ * "Rubber band mode" the entry screen offers.
+ */
+export function drawPatternPreview(s, t, state) {
+  if (!t || !state?.origin) return;
+  const ox = t.x(state.origin.e), oy = t.y(state.origin.n);
+  for (const q of state.live ?? []) {
+    s.circle(t.x(q.e), t.y(q.n), 3, YELLOW);
+  }
+  // The first row, so the bearing being indicated is unambiguous.
+  const row = (state.live ?? []).filter((q) => q.row === 0);
+  if (row.length > 1) {
+    const a = row[0], b = row[row.length - 1];
+    s.line(t.x(a.e), t.y(a.n), t.x(b.e), t.y(b.n), CYAN);
+  }
+  s.line(ox - 3, oy, ox + 3, oy, WHITE);
+  s.line(ox, oy - 3, ox, oy + 3, WHITE);
+}
+
 /** Blit a cursor sprite centred on the pointer. */
 export function drawCursorSprite(s, rows, x, y) {
   const w = rows[0].length;

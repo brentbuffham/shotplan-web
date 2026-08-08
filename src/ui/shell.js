@@ -30,6 +30,10 @@ import {
   BENCH_REMOVE_PROMPT, BENCH_REMOVE_NONE,
 } from './edit.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
+import {
+  addPattern, patternPositions, bearingBetween, sizeFromCursor, PATTERN_DEFAULTS,
+  PATTERN_PROMPT_ORIGIN, PATTERN_PROMPT_DIRECTION, PATTERN_PROMPT_SIZE,
+} from '../calc/pattern.js';
 
 /** Verbatim from SHOTPLAN.EXE @0x2CA8 — the original's own zoom prompt. */
 const ZOOM_PROMPT =
@@ -90,6 +94,9 @@ export class Shell {
     // until Right/DEL finishes it, matching "Mark along crest ... then
     // Right/Del to finish."
     this.benchPoints = [];
+    // Add > Pattern is placed in three steps, which is why it needs state the
+    // other operations do not: 'origin' -> 'direction' -> 'size'.
+    this.pattern = null;     // {stage, params, origin, bearing, side, live}
     this.tieFrom = null;     // 1-based hole index, once the first is picked
   }
 
@@ -263,6 +270,12 @@ export class Shell {
       if (this.editOp === 'Bench') return BENCH_PROMPT_MARK;
       if (this.editOp === 'HoleRemove') return HOLE_REMOVE_PROMPT;
       if (this.editOp === 'BenchRemove') return BENCH_REMOVE_PROMPT;
+      if (this.editOp === 'Pattern') {
+        const st = this.pattern?.stage;
+        if (st === 'direction') return PATTERN_PROMPT_DIRECTION;
+        if (st === 'size') return PATTERN_PROMPT_SIZE;
+        return PATTERN_PROMPT_ORIGIN;
+      }
     }
     if (this.quantities) return 'Quantities summary      Right/DEL or ESC to exit';
     if (this.contour) {
@@ -444,6 +457,23 @@ export class Shell {
     let changed = false;
     // Edit mode draws a tool at the pointer, so it has to know where it is.
     if (this.editMode) { this.pointer = { x: px, y: py }; changed = true; }
+    // A pattern previews from the origin onwards, which is what "Rubber band
+    // mode : ON|OFF" on the entry screen is switching.
+    if (this.editMode && this.editOp === 'Pattern' && this.pattern?.origin) {
+      const t = this.view.transform();
+      if (t) {
+        const st = this.pattern;
+        const at = { e: t.toE(px), n: t.toN(py) };
+        const bearing = st.stage === 'direction'
+          ? bearingBetween(st.origin, at) : st.bearing;
+        const params = st.stage === 'size'
+          ? { ...st.params, ...sizeFromCursor(st.params, st.origin, at) }
+          : st.params;
+        st.bearing = bearing;
+        st.live = patternPositions(params, st.origin, bearing, st.side);
+        changed = true;
+      }
+    }
     if (this.contour && this.contour.mode === 'Relief' && this.contour.sub === 'Explore') {
       this.contour.cursor = { x: px, y: py };
       this.onChange();
@@ -567,6 +597,39 @@ export class Shell {
       return;
     }
 
+    // --- edit: place a pattern, in the original's three steps ---
+    //
+    //   1. "Move cursor to position of the leading hole then press Left/Ins"
+    //   2. "Indicate direction of the first row then Left/Ins or Right/Del"
+    //   3. "Use cursor to expand or contract pattern. Left/Ins accept"
+    //
+    // Nothing is committed until step 3 accepts, so Right/DEL at any point
+    // leaves the plan alone.
+    if (this.editMode && this.editOp === 'Pattern' && this.pattern && inPlot(px, py)) {
+      const t = this.view.transform();
+      if (!t) return;
+      const at = { e: t.toE(px), n: t.toN(py) };
+      const st = this.pattern;
+      if (st.stage === 'origin') {
+        st.origin = at;
+        st.stage = 'direction';
+      } else if (st.stage === 'direction') {
+        st.bearing = bearingBetween(st.origin, at);
+        st.stage = 'size';
+      } else {
+        // Accept at whatever size the cursor last set.
+        const sized = sizeFromCursor(st.params, st.origin, at);
+        const params = { ...st.params, spacing: sized.spacing, burden: sized.burden };
+        const r = addPattern(this.plan, params, st.origin, st.bearing, st.side);
+        this.status = r.ok ? '' : r.reason;
+        this.pattern = null;
+        this.editOp = null;
+        if (r.ok) this.recompute();
+      }
+      this.onChange();
+      return;
+    }
+
     // --- edit: mark the crest of a new bench ---
     if (this.editMode && this.editOp === 'Bench' && inPlot(px, py)) {
       const t = this.view.transform();
@@ -670,6 +733,7 @@ export class Shell {
     if (this.editMode && this.editOp) {
       this.editOp = null;
       this.tieFrom = null;
+      this.pattern = null;      // nothing was committed; the plan is untouched
       this.status = '';
       this.onChange();
       return;
@@ -831,6 +895,7 @@ export class Shell {
         'Add|Hole': 'Hole',
         'Add|Dummy hole': 'Dummy',
         'Add|Bench': 'Bench',
+        'Add|Pattern': 'Pattern',
         'Remove|Holes': 'HoleRemove',
         'Remove|Bench': 'BenchRemove',
       }[`${owner}|${item.label}`];
@@ -847,6 +912,10 @@ export class Shell {
         }
         this.editOp = op;
         this.benchPoints = [];
+        this.pattern = op === 'Pattern'
+          ? { stage: 'origin', params: { ...PATTERN_DEFAULTS }, origin: null,
+              bearing: 0, side: 1, live: [] }
+          : null;
         this.tieFrom = null;
         this.status = '';
         this.close();

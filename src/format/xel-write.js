@@ -61,8 +61,10 @@ export function writeXel(plan) {
   const pt = plan.patternTable;
   L.push(`${pt.freeIndex} ${pt.selected}`);
   for (const p of pt.patterns) {
-    L.push(`${p.nRows} ${p.nInRow} ${p.type} ${p.unknown}`
-      + `${f2(p.spacing).padStart(9)}${f2(p.burden).padStart(9)}${f2(p.minDist).padStart(9)}`);
+    // Column order is field5, burden, spacing — see the note in xel.js. It is
+    // NOT spacing-first, which is what the names used to imply.
+    L.push(`${p.nRows} ${p.nInRow} ${p.type} ${p.firstHole}`
+      + `${f2(p.field5).padStart(9)}${f2(p.burden).padStart(9)}${f2(p.spacing).padStart(9)}`);
   }
 
   // Detonators: description occupies a fixed 10 characters, then the numeric

@@ -17,6 +17,10 @@ import {
   ADD_HOLE_PROMPT, ADD_DUMMY_PROMPT, BENCH_PROMPT_MARK,
   HOLE_REMOVE_PROMPT, BENCH_REMOVE_PROMPT, BENCH_TOO_SHORT,
 } from '../src/ui/edit.js';
+import {
+  PATTERN_PROMPT_ORIGIN, PATTERN_PROMPT_DIRECTION, PATTERN_PROMPT_SIZE,
+  PATTERN_DEFAULTS,
+} from '../src/calc/pattern.js';
 
 let bad = 0;
 const check = (label, got, want) => {
@@ -157,6 +161,51 @@ console.log('\n=== Remove > Bench with no benches refuses up front ===');
   choose(sh, 'Remove', 'Bench');
   check('not armed', sh.editOp, null);
   check('says so', sh.status, 'There are no benches present to be deleted.');
+}
+
+console.log('\n=== Add > Pattern: three steps, nothing committed early ===');
+{
+  const sh = shellWith();
+  choose(sh, 'Add', 'Pattern');
+  check('armed', sh.editOp, 'Pattern');
+  check('starts at the origin step', sh.pattern.stage, 'origin');
+  check('origin prompt', sh.statusLine(), PATTERN_PROMPT_ORIGIN);
+  const before = sh.plan.holes.length;
+
+  sh.leftClick(CX - 60, CY);            // 1: leading hole
+  check('advances to direction', sh.pattern.stage, 'direction');
+  check('direction prompt', sh.statusLine(), PATTERN_PROMPT_DIRECTION);
+  check('nothing added yet', sh.plan.holes.length, before);
+
+  sh.leftClick(CX + 60, CY);            // 2: direction of the first row
+  check('advances to size', sh.pattern.stage, 'size');
+  check('size prompt', sh.statusLine(), PATTERN_PROMPT_SIZE);
+  check('still nothing added', sh.plan.holes.length, before);
+
+  sh.leftClick(CX + 60, CY);            // 3: accept
+  const pats = sh.plan.patternTable.patterns;
+  check('holes appended on accept', sh.plan.holes.length - before,
+    PATTERN_DEFAULTS.nRows * PATTERN_DEFAULTS.nInRow);
+  check('a pattern record was added', pats[pats.length - 1].nRows, PATTERN_DEFAULTS.nRows);
+  check('new holes carry the pattern id + 1',
+    sh.plan.holes[before].kind, pats.length + 1);
+  check('operation finished', sh.editOp, null);
+  check('state cleared', sh.pattern, null);
+}
+
+console.log('\n=== Add > Pattern: Right/DEL abandons it ===');
+{
+  const sh = shellWith();
+  choose(sh, 'Add', 'Pattern');
+  const before = sh.plan.holes.length;
+  const pats = sh.plan.patternTable.patterns.length;
+  sh.leftClick(CX - 60, CY);
+  sh.leftClick(CX + 60, CY);
+  sh.rightClick(CX, CY);
+  check('no holes added', sh.plan.holes.length, before);
+  check('no pattern record added', sh.plan.patternTable.patterns.length, pats);
+  check('state cleared', sh.pattern, null);
+  check('operation finished', sh.editOp, null);
 }
 
 console.log('\n=== Add > Tie still arms (regression) ===');
