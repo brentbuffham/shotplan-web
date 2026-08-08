@@ -109,11 +109,11 @@
     <div class="row"><span class="name">Show</span><span class="bar"><i style="width:100%"></i></span><span class="num">12 / 12</span></div>
     <div class="row"><span class="name">Calculations</span><span class="bar"><i style="width:100%"></i></span><span class="num">6 / 6</span></div>
     <div class="row"><span class="name">Files</span><span class="bar part"><i style="width:42%"></i></span><span class="num">2.5 / 6</span></div>
-    <div class="row"><span class="name">Edit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 8</span></div>
+    <div class="row"><span class="name">Edit</span><span class="bar part"><i style="width:38%"></i></span><span class="num">3 / 8</span></div>
     <div class="row"><span class="name">Print / Plot</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Options</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Quit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 1</span></div>
-    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:50%"></i></span><span class="num">20.5 / 41</span></div>
+    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:57%"></i></span><span class="num">23.5 / 41</span></div>
   </section>
 
   <div class="stage">
@@ -139,8 +139,15 @@
         forty-two lines. Working: plan loading and saving, navigation,
         every display toggle, Visualize, Time Envelope, Overlap probabilities,
         timing contours, first movement, burden relief and quantities.
-        Not built: the whole Edit mode, printing and plotting, and the options
-        screens.
+        Not built: printing and plotting, and the options screens.
+      </p>
+      <p>
+        Edit mode counts conservatively. Show and Window work, and Add Tie is
+        wired to the pointer with the original's connector cursors. The plan
+        operations behind Add and Remove — holes, dummy holes, benches, text,
+        boundary, ties — are implemented and tested against the real files,
+        including the hole free list and the bench crest/foot pairing, but not
+        all of them have their pointer interaction yet.
       </p>
       <p>
         The Calculations menu counts six, not seven. SHOTPlan contains a

@@ -165,6 +165,170 @@ export function removeHole(plan, index1) {
   return true;
 }
 
+/* -------------------------------------------------------------------------
+ * Benches
+ *
+ * A bench is two paired polylines, a crest and a foot, and the file format
+ * requires them to have the SAME number of points — every sample does, without
+ * exception. That pairing is the invariant every operation below protects.
+ *
+ * The two are not required to be in the same place, and what they hold tells
+ * you how a bench was made:
+ *
+ *   OVERBUR.XEL   drawn by hand      crest === foot at every point
+ *   BORPURG.XEL   from survey        13/26, 7/18, 6/22 points identical
+ *
+ * So marking a crest produces a vertical face — the foot is a copy — and the
+ * two only diverge once real survey data or an edit moves them apart. That is
+ * why Add Bench prompts for the crest alone.
+ *
+ * Limits, read from the overlay rather than guessed:
+ *   cmp word ptr [0x1dec], 8      -> "The bench tables are full ..."
+ *   cmp word ptr es:[di], 0x64    -> "Maximum points per bench added."
+ * ---------------------------------------------------------------------- */
+
+/** Bench prompts and refusals, verbatim from SHOTPLAN.OVR. */
+export const BENCH_PROMPT_MARK =
+  'Mark along crest of the bench using Left/Ins button then Right/Del to finish.';
+export const BENCH_PROMPT_MOVE =
+  'Use Left/Ins to select bench point to move or Right/Del to abort.';
+export const BENCH_PROMPT_MOVE_TO =
+  'Press Left/Ins button at new position or Right/Del to abort.';
+export const BENCH_PROMPT_ADD_TO =
+  'Use Left/Ins to select bench for addition or Right/Del to abort.';
+export const BENCH_PROMPT_SEGMENT =
+  'Use left/Ins to select segment in which point will be for added.';
+export const BENCH_PROMPT_NEW_POINT =
+  'Press Left/Ins button at new point position or Right/Del to abort.';
+export const BENCH_PROMPT_REMOVE_POINT =
+  'Use Left/Ins to select bench point to remove or Right/Del to abort.';
+export const BENCH_FULL =
+  'The bench tables are full and no more benches may be defined.';
+export const BENCH_MAX_POINTS = 'Maximum points per bench added.';
+export const BENCH_AT_MAX = 'This bench is at the maxmium number of points.';
+export const BENCH_TOO_SHORT = 'A bench must include at least one line segment.';
+export const BENCH_NONE = 'No benches are defined.';
+export const BENCH_OUTSIDE = 'The position is outside the plan and cannot be used.';
+
+/** Change > Bench submenu, from the pipe-separated string at cs:0x0B3C. */
+export const BENCH_CHANGE_ITEMS = ['Move point', 'Add point', 'Remove point'];
+
+/** Maximum benches in a plan. */
+export const MAX_BENCHES = 8;
+/** Maximum points in one bench polyline. */
+export const MAX_BENCH_POINTS = 100;
+
+/**
+ * Add a bench from points marked along its crest.
+ *
+ * The foot is created as a copy of the crest, giving a vertical face, which is
+ * what the samples drawn in the program contain.
+ */
+export function addBench(plan, crestPoints) {
+  if (plan.benches.length >= MAX_BENCHES) return { ok: false, reason: BENCH_FULL };
+  // "at least one line segment" means two points, not one.
+  if (!crestPoints || crestPoints.length < 2) return { ok: false, reason: BENCH_TOO_SHORT };
+  if (crestPoints.length > MAX_BENCH_POINTS) return { ok: false, reason: BENCH_MAX_POINTS };
+
+  const pt = (p) => ({ e: p.e, n: p.n, rl: p.rl ?? 0 });
+  plan.benches.push({
+    crest: crestPoints.map(pt),
+    foot: crestPoints.map(pt),
+  });
+  return { ok: true, index: plan.benches.length - 1 };
+}
+
+/** Remove a whole bench. */
+export function removeBench(plan, index) {
+  if (index < 0 || index >= plan.benches.length) return { ok: false, reason: BENCH_NONE };
+  plan.benches.splice(index, 1);
+  return { ok: true };
+}
+
+/**
+ * Insert a point into a bench, within segment `segment` (0-based, the span
+ * between point `segment` and `segment + 1`).
+ *
+ * Inserted into BOTH polylines to keep the counts paired. The crest takes the
+ * marked position; the foot takes the corresponding position along its own
+ * segment, so a battered face stays battered instead of being pinched.
+ */
+export function addBenchPoint(plan, index, segment, e, n, rl = 0) {
+  const b = plan.benches[index];
+  if (!b) return { ok: false, reason: BENCH_NONE };
+  if (b.crest.length >= MAX_BENCH_POINTS) return { ok: false, reason: BENCH_AT_MAX };
+  if (segment < 0 || segment >= b.crest.length - 1) {
+    return { ok: false, reason: BENCH_PROMPT_SEGMENT };
+  }
+
+  // Where along the crest segment the new point falls, so the foot can be cut
+  // at the same fraction rather than at an unrelated place.
+  const a = b.crest[segment];
+  const c = b.crest[segment + 1];
+  const dx = c.e - a.e;
+  const dy = c.n - a.n;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 < 1e-12 ? 0 : ((e - a.e) * dx + (n - a.n) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+
+  const fa = b.foot[segment];
+  const fc = b.foot[segment + 1];
+  b.crest.splice(segment + 1, 0, { e, n, rl });
+  b.foot.splice(segment + 1, 0, {
+    e: fa.e + (fc.e - fa.e) * t,
+    n: fa.n + (fc.n - fa.n) * t,
+    rl: (fa.rl ?? 0) + ((fc.rl ?? 0) - (fa.rl ?? 0)) * t,
+  });
+  return { ok: true, at: segment + 1 };
+}
+
+/** Remove a point from a bench, from both polylines so the counts stay paired. */
+export function removeBenchPoint(plan, index, point) {
+  const b = plan.benches[index];
+  if (!b) return { ok: false, reason: BENCH_NONE };
+  if (point < 0 || point >= b.crest.length) return { ok: false, reason: BENCH_NONE };
+  // Dropping below two points would leave no line segment at all.
+  if (b.crest.length <= 2) return { ok: false, reason: BENCH_TOO_SHORT };
+  b.crest.splice(point, 1);
+  b.foot.splice(point, 1);
+  return { ok: true };
+}
+
+/**
+ * Move one bench point.
+ *
+ * Moves the crest or the foot on its own — the two only have to match in
+ * count, not in position, which is exactly how a battered face is represented.
+ */
+export function moveBenchPoint(plan, index, point, e, n, which = 'crest') {
+  const b = plan.benches[index];
+  if (!b) return { ok: false, reason: BENCH_NONE };
+  const line = which === 'foot' ? b.foot : b.crest;
+  const p = line[point];
+  if (!p) return { ok: false, reason: BENCH_NONE };
+  p.e = e;
+  p.n = n;
+  return { ok: true };
+}
+
+/**
+ * The bench point nearest a world position, searching crest and foot.
+ * Used by Move point and Remove point.
+ */
+export function pickBenchPoint(plan, e, n, tol) {
+  let best = null;
+  let bestD = tol;
+  plan.benches.forEach((b, bi) => {
+    for (const which of ['crest', 'foot']) {
+      b[which].forEach((p, pi) => {
+        const d = Math.hypot(p.e - e, p.n - n);
+        if (d < bestD) { bestD = d; best = { bench: bi, point: pi, which }; }
+      });
+    }
+  });
+  return best;
+}
+
 /** Add a text string at a position. `texts` is modelled by the parser. */
 export function addText(plan, e, n, text, height = 1) {
   plan.texts.push({ e, n, text, height });
