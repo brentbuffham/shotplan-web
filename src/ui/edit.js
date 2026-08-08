@@ -61,6 +61,14 @@ export const ADD_PATTERN_PROMPT =
 export const OUTSIDE_PLAN =
   'The selected position outside plan and cannot be used.';
 
+/** Remove prompts, verbatim. */
+export const HOLE_REMOVE_PROMPT =
+  'Select holes to delete with Left/Ins button or Right/Del to finish.';
+export const HOLE_REMOVE_NONE = 'No holes are present to be deleted.';
+export const BENCH_REMOVE_PROMPT =
+  'Mark point on bench to be removed with Left/Ins button or Right/Del to abort.';
+export const BENCH_REMOVE_NONE = 'There are no benches present to be deleted.';
+
 /**
  * Add a hole, reusing a deleted record when one is free.
  *

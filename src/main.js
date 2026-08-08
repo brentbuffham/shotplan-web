@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawTiePreview, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawTiePreview, drawBenchPreview, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { DEMO_PLAN_XEL } from './format/demo-plan-data.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -111,6 +111,9 @@ function render() {
     if (shell.editOp === 'Tie') {
       drawTiePreview(screen, shell.plan, shell.view.transform(),
         shell.tieFrom, shell.pointer, shell.armedSlot + 1);
+    }
+    if (shell.editOp === 'Bench') {
+      drawBenchPreview(screen, shell.view.transform(), shell.benchPoints, shell.pointer);
     }
     if (shell.editOp === 'Tie' && shell.pointer) {
       drawCursorSprite(screen,

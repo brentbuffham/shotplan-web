@@ -239,8 +239,11 @@ export function drawPlan(s, plan, opts = {}) {
   // --- benches: crest and foot polylines ---
   if (show.benches) {
     for (const bench of plan.benches) {
-      // Observed green in v3.0. Crest and foot are identical in the only
-      // sample available, so whether they differ in colour is unconfirmed.
+      // Observed green in v3.0. Crest and foot genuinely differ in position on
+      // surveyed plans — BORPURG has only 13/26, 7/18 and 6/22 points in
+      // common — while plans drawn in the program have them identical, because
+      // marking a crest copies it to the foot. Whether v3.0 draws the two in
+      // different colours is still unconfirmed; both are green here.
       for (const [pts, colour] of [[bench.crest, GREEN], [bench.foot, GREEN]]) {
         for (let i = 0; i + 1 < pts.length; i++) {
           const a = pts[i], b = pts[i + 1];
@@ -862,6 +865,33 @@ export function drawTiePreview(s, plan, t, fromIndex1, pointer, tieType) {
   if (pointer) {
     s.line(x, y, pointer.x, pointer.y, colour);
     arrowHead(s, x, y, pointer.x, pointer.y, colour);
+  }
+}
+
+/**
+ * The crest being marked for a new bench, before Right/DEL commits it.
+ *
+ * Drawn in the same green as a finished bench, with a rubber band to the
+ * pointer, so a partly-marked crest reads as the thing it will become. Only
+ * the crest is shown: the foot does not exist until the bench is created, when
+ * it is copied from the crest.
+ */
+export function drawBenchPreview(s, t, points, pointer) {
+  if (!t || !points || !points.length) return;
+  const px = (p) => [t.x(p.e), t.y(p.n)];
+  for (let i = 0; i + 1 < points.length; i++) {
+    const [ax, ay] = px(points[i]);
+    const [bx, by] = px(points[i + 1]);
+    s.line(ax, ay, bx, by, GREEN);
+  }
+  for (const p of points) {
+    const [x, y] = px(p);
+    s.line(x - 2, y, x + 2, y, GREEN);
+    s.line(x, y - 2, x, y + 2, GREEN);
+  }
+  if (pointer) {
+    const [lx, ly] = px(points[points.length - 1]);
+    s.line(lx, ly, pointer.x, pointer.y, GREEN);
   }
 }
 

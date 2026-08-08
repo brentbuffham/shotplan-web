@@ -22,6 +22,12 @@ import { loadPlan, savePlan, importSurvey } from './files.js';
 import {
   addTie, removeTie, changeTieType, pickTie,
   TIE_PROMPT_FIRST, TIE_PROMPT_SECOND, TIE_PROMPT_DELETE, TIE_PROMPT_CHANGE,
+  addHole, addDummyHole, removeHole,
+  addBench, removeBench, pickBenchPoint,
+  ADD_HOLE_PROMPT, ADD_DUMMY_PROMPT,
+  BENCH_PROMPT_MARK, BENCH_TOO_SHORT,
+  HOLE_REMOVE_PROMPT, HOLE_REMOVE_NONE,
+  BENCH_REMOVE_PROMPT, BENCH_REMOVE_NONE,
 } from './edit.js';
 import { Visualization, VISUALIZE_PROMPT, SPEEDS } from '../calc/visualize.js';
 
@@ -80,6 +86,10 @@ export class Shell {
     this.editMode = false;
     this.editOp = null;      // e.g. 'Tie'
     this.armedSlot = -1;     // index into the surface detonator bar
+    // Crest points accumulated while marking a bench. The bench is not created
+    // until Right/DEL finishes it, matching "Mark along crest ... then
+    // Right/Del to finish."
+    this.benchPoints = [];
     this.tieFrom = null;     // 1-based hole index, once the first is picked
   }
 
@@ -248,6 +258,11 @@ export class Shell {
       }
       if (this.editOp === 'TieRemove') return TIE_PROMPT_DELETE;
       if (this.editOp === 'TieChange') return TIE_PROMPT_CHANGE;
+      if (this.editOp === 'Hole') return ADD_HOLE_PROMPT;
+      if (this.editOp === 'Dummy') return ADD_DUMMY_PROMPT;
+      if (this.editOp === 'Bench') return BENCH_PROMPT_MARK;
+      if (this.editOp === 'HoleRemove') return HOLE_REMOVE_PROMPT;
+      if (this.editOp === 'BenchRemove') return BENCH_REMOVE_PROMPT;
     }
     if (this.quantities) return 'Quantities summary      Right/DEL or ESC to exit';
     if (this.contour) {
@@ -522,6 +537,62 @@ export class Shell {
       return;
     }
 
+    // --- edit: add a hole or a dummy hole ---
+    // Both are one click, one record. New holes copy their in-hole delay from
+    // the armed slot so a run of holes comes out consistent, which is what the
+    // original does rather than prompting for every hole.
+    if (this.editMode && (this.editOp === 'Hole' || this.editOp === 'Dummy')
+        && inPlot(px, py)) {
+      const t = this.view.transform();
+      if (!t) return;
+      const e = t.toE(px), n = t.toN(py);
+      const r = this.editOp === 'Dummy'
+        ? addDummyHole(this.plan, e, n, 0)
+        : addHole(this.plan, e, n, 0, { delay: Math.max(1, this.armedSlot + 1) });
+      this.status = r.ok ? '' : r.reason;
+      if (r.ok) this.recompute();
+      this.onChange();
+      return;
+    }
+
+    // --- edit: remove a hole ---
+    if (this.editMode && this.editOp === 'HoleRemove' && inPlot(px, py)) {
+      const t = this.view.transform();
+      const hole = pickHole(this.plan, t, px, py, 10);
+      if (!hole) { this.status = ''; this.onChange(); return; }
+      removeHole(this.plan, hole.index + 1);
+      this.status = '';
+      this.recompute();                       // ties went with it
+      this.onChange();
+      return;
+    }
+
+    // --- edit: mark the crest of a new bench ---
+    if (this.editMode && this.editOp === 'Bench' && inPlot(px, py)) {
+      const t = this.view.transform();
+      if (!t) return;
+      this.benchPoints.push({ e: t.toE(px), n: t.toN(py), rl: 0 });
+      this.status = '';
+      this.onChange();
+      return;
+    }
+
+    // --- edit: remove a bench, identified by a point on it ---
+    if (this.editMode && this.editOp === 'BenchRemove' && inPlot(px, py)) {
+      if (!this.plan.benches.length) {
+        this.status = BENCH_REMOVE_NONE;
+        this.onChange();
+        return;
+      }
+      const t = this.view.transform();
+      const hit = pickBenchPoint(this.plan, t.toE(px), t.toN(py), 10 / t.scale);
+      if (!hit) { this.status = ''; this.onChange(); return; }
+      removeBench(this.plan, hit.bench);
+      this.status = '';
+      this.onChange();
+      return;
+    }
+
     // --- edit: pick holes to tie ---
     if (this.editMode && this.editOp === 'Tie' && inPlot(px, py)) {
       const t = this.view.transform();
@@ -579,6 +650,30 @@ export class Shell {
    * "Right/Del button expand/contract" means.
    */
   rightClick(px, py) {
+    // Marking a bench: Right/DEL is what *finishes* it, not what cancels it.
+    // The bench is only created here, so a run of clicks that never reaches
+    // two points leaves the plan untouched and says why.
+    if (this.editMode && this.editOp === 'Bench') {
+      const pts = this.benchPoints;
+      this.benchPoints = [];
+      if (pts.length >= 2) {
+        const r = addBench(this.plan, pts);
+        this.status = r.ok ? '' : r.reason;
+      } else {
+        this.status = pts.length ? BENCH_TOO_SHORT : '';
+      }
+      this.editOp = null;
+      this.onChange();
+      return;
+    }
+    // Any other edit operation: Right/DEL finishes it, as the prompts say.
+    if (this.editMode && this.editOp) {
+      this.editOp = null;
+      this.tieFrom = null;
+      this.status = '';
+      this.onChange();
+      return;
+    }
     if (this.quantities) { this.quantities = false; this.onChange(); return; }
     if (this.contour) { this.stopContours(); return; }
     if (this.overlap) { this.stopOverlap(); return; }
@@ -718,9 +813,49 @@ export class Shell {
     }
     // --- Edit mode --------------------------------------------------------
     if (item.label === 'Exit EDIT') { this.exitEditMode(); return; }
-    if (this.editMode && item.label === 'Tie' && parent) {
-      // Add, Remove and Change all offer "Tie"; the parent decides which.
-      const op = { Add: 'Tie', Remove: 'TieRemove', Change: 'TieChange' }[parent];
+    // Which menu an edit item came from is what disambiguates it: "Bench"
+    // appears under Add, Remove and Change, and "Tie" under all three too.
+    //
+    // That owner is `parent` for a three-level menu, but the EDIT bar is only
+    // two levels deep — Add/Remove/Change ARE the bar — so there `parent` is
+    // null and the owner arrives as `menuLabel`. Testing `parent` alone made
+    // every edit item fall through to "not implemented yet", which is how the
+    // already-wired Add > Tie was silently broken.
+    const owner = parent ?? menuLabel;
+
+    // Add and Remove name several things the same way the Tie family does, so
+    // the owner decides the operation. Keyed on (owner, item) for that reason
+    // — matching on the item alone would make Remove > Bench start an Add.
+    if (this.editMode && owner) {
+      const op = {
+        'Add|Hole': 'Hole',
+        'Add|Dummy hole': 'Dummy',
+        'Add|Bench': 'Bench',
+        'Remove|Holes': 'HoleRemove',
+        'Remove|Bench': 'BenchRemove',
+      }[`${owner}|${item.label}`];
+      if (op) {
+        if (op === 'HoleRemove' && !this.plan.holes.some((h) => h.live || h.dummy)) {
+          this.status = HOLE_REMOVE_NONE;
+          this.close();
+          return;
+        }
+        if (op === 'BenchRemove' && !this.plan.benches.length) {
+          this.status = BENCH_REMOVE_NONE;
+          this.close();
+          return;
+        }
+        this.editOp = op;
+        this.benchPoints = [];
+        this.tieFrom = null;
+        this.status = '';
+        this.close();
+        return;
+      }
+    }
+    if (this.editMode && item.label === 'Tie' && owner) {
+      // Add, Remove and Change all offer "Tie"; the owning menu decides which.
+      const op = { Add: 'Tie', Remove: 'TieRemove', Change: 'TieChange' }[owner];
       if (op) {
         this.editOp = op;
         this.tieFrom = null;

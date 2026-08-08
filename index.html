@@ -109,11 +109,11 @@
     <div class="row"><span class="name">Show</span><span class="bar"><i style="width:100%"></i></span><span class="num">12 / 12</span></div>
     <div class="row"><span class="name">Calculations</span><span class="bar"><i style="width:100%"></i></span><span class="num">6 / 6</span></div>
     <div class="row"><span class="name">Files</span><span class="bar part"><i style="width:42%"></i></span><span class="num">2.5 / 6</span></div>
-    <div class="row"><span class="name">Edit</span><span class="bar part"><i style="width:38%"></i></span><span class="num">3 / 8</span></div>
+    <div class="row"><span class="name">Edit</span><span class="bar part"><i style="width:63%"></i></span><span class="num">5 / 8</span></div>
     <div class="row"><span class="name">Print / Plot</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Options</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Quit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 1</span></div>
-    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:57%"></i></span><span class="num">23.5 / 41</span></div>
+    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:62%"></i></span><span class="num">25.5 / 41</span></div>
   </section>
 
   <div class="stage">
@@ -142,12 +142,12 @@
         Not built: printing and plotting, and the options screens.
       </p>
       <p>
-        Edit mode counts conservatively. Show and Window work, and Add Tie is
-        wired to the pointer with the original's connector cursors. The plan
-        operations behind Add and Remove — holes, dummy holes, benches, text,
-        boundary, ties — are implemented and tested against the real files,
-        including the hole free list and the bench crest/foot pairing, but not
-        all of them have their pointer interaction yet.
+        In Edit mode, Show and Window work, and Add and Remove are wired to the
+        pointer for holes, dummy holes, benches and ties — Left/INS acts,
+        Right/DEL finishes, and the pointer carries the mode rather than the
+        status line, which is how the original keeps your eye on the plan.
+        Marking a bench crest previews as you go and only commits on Right/DEL.
+        Still to come: Pattern and Fill-in, lead-ins, and the Change family.
       </p>
       <p>
         The Calculations menu counts six, not seven. SHOTPlan contains a
