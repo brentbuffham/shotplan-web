@@ -107,13 +107,13 @@
   <section class="prog">
     <h2>Rebuild progress — original menu items implemented</h2>
     <div class="row"><span class="name">Show</span><span class="bar"><i style="width:100%"></i></span><span class="num">12 / 12</span></div>
-    <div class="row"><span class="name">Calculations</span><span class="bar"><i style="width:86%"></i></span><span class="num">6 / 7</span></div>
+    <div class="row"><span class="name">Calculations</span><span class="bar"><i style="width:100%"></i></span><span class="num">6 / 6</span></div>
     <div class="row"><span class="name">Files</span><span class="bar part"><i style="width:42%"></i></span><span class="num">2.5 / 6</span></div>
     <div class="row"><span class="name">Edit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 8</span></div>
     <div class="row"><span class="name">Print / Plot</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Options</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 4</span></div>
     <div class="row"><span class="name">Quit</span><span class="bar none"><i style="width:0%"></i></span><span class="num">0 / 1</span></div>
-    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:49%"></i></span><span class="num">20.5 / 42</span></div>
+    <div class="row total"><span class="name">Overall</span><span class="bar"><i style="width:50%"></i></span><span class="num">20.5 / 41</span></div>
   </section>
 
   <div class="stage">
@@ -139,9 +139,20 @@
         forty-two lines. Working: plan loading and saving, navigation,
         every display toggle, Visualize, Time Envelope, Overlap probabilities,
         timing contours, first movement, burden relief and quantities.
-        Not built: the whole Edit mode, printing and plotting, the options
-        screens, and Misfires — which needs a reliability database that is
-        still undecoded.
+        Not built: the whole Edit mode, printing and plotting, and the options
+        screens.
+      </p>
+      <p>
+        The Calculations menu counts six, not seven. SHOTPlan contains a
+        complete <b>Misfires</b> calculation — failure combinations enumerated
+        exactly, extent found by flood fill from the lead-ins — but it is
+        switched off in the shipped build: one global picks between the menu
+        strings <code>VOTARQM</code> and <code>VOTARQ</code>, and across both
+        binaries exactly one instruction writes that byte, setting it to zero.
+        The reliability database backs this up, holding round placeholders
+        rather than measurements. The calculation is ported here and reachable
+        by flipping the same flag, but it is <i>recovered</i> code: nobody
+        running v3.0 ever saw it.
       </p>
       <p>
         Ships with a demonstration pattern and a synthetic product database.

@@ -10,6 +10,36 @@
  * is how the original shows them.
  */
 
+/**
+ * `DS:0x160B` — the reliability subsystem switch.
+ *
+ * The Calculations menu is built from one of two hard-coded strings, and this
+ * byte picks which:
+ *
+ *     0x000D33  cmp byte ptr [0x160b], 0
+ *     0x000D38  je  -> Visualize|Overlap|Time Envelope|Angle of initiation|
+ *                      Relief|Quantities                          "VOTARQ"
+ *               else-> ...|Quantities|Misfires                    "VOTARQM"
+ *
+ * It is **false here because it is false in the original**. Decoding every
+ * instruction at every byte offset of both `SHOTPLAN.OVR` and `SHOTPLAN.EXE`
+ * — 16-bit code is not self-synchronising, so a linear sweep misses code the
+ * real flow reaches — finds exactly one instruction that writes this address:
+ *
+ *     0x032DFA  mov byte ptr [0x160b], 0
+ *
+ * in a block of global initialisers. Nothing sets it to 1, nothing takes a
+ * pointer to it, and `SHOTPLAN.OPT` is line-oriented text rather than a record
+ * loaded over those globals. Six further sites read it, all gating reliability
+ * warnings, so it switches the whole subsystem and not just a menu entry.
+ *
+ * `src/calc/misfires.js` is therefore a faithful port of code that v3.0 never
+ * runs. The switch is reproduced rather than the outcome hard-coded, so the
+ * default matches the original exactly while the recovered calculation stays
+ * reachable by flipping one flag.
+ */
+export const RELIABILITY_ENABLED = false;
+
 /** Trailing `!` in "Clear Plan!" is the original's own emphasis. */
 export const MENUS = [
   {
@@ -30,7 +60,7 @@ export const MENUS = [
     label: 'Edit', hot: 0, entersEditMode: true,
   },
   {
-    label: 'Calculations', hot: 0, // 0x0A4B — VOTARQME
+    label: 'Calculations', hot: 0, // VOTARQM / VOTARQ
     items: [
       // Playback speed, confirmed from a screenshot of v3.0's Calculations
       // menu. The binary stores these submenu strings in the same order as
@@ -47,7 +77,7 @@ export const MENUS = [
       // to exit".
       { label: 'Relief', hot: 0, items: ['Display', 'Explore'] },
       { label: 'Quantities', hot: 0 },
-      { label: 'Misfires', hot: 0 },
+      // Misfires is appended below, and only when RELIABILITY_ENABLED is set.
     ],
   },
   {
@@ -87,6 +117,13 @@ export const MENUS = [
   },
   { label: 'Quit', hot: 0, confirm: 'Confirm Quit Program ?' }, // 0x0005
 ];
+
+// The seventh Calculations item exists only when the switch is on, exactly as
+// the two menu strings in the overlay do. With RELIABILITY_ENABLED false this
+// is a no-op and the menu is the six-item VOTARQ the program actually shows.
+if (RELIABILITY_ENABLED) {
+  MENUS.find((m) => m.label === 'Calculations').items.push({ label: 'Misfires', hot: 0 });
+}
 
 /**
  * Edit mode replaces the whole menu bar, it does not open a dropdown.
