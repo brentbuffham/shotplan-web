@@ -514,6 +514,16 @@ export class Shell {
     const bar = this.hitMenuBar(px, py);
     if (bar >= 0) {
       if (this.menus[bar].entersEditMode) { this.enterEditMode(); return; }
+      // A bar entry with no dropdown is a leaf: clicking it IS the action.
+      // "Exit EDIT", "Data" and "Quit" have no items, and this branch used to
+      // just toggle an empty dropdown for them — which left Exit EDIT with no
+      // way to be reached at all, so edit mode could only be left by reloading.
+      if (!itemsOf(this.menus[bar])) {
+        const entry = this.menus[bar];
+        this.close();
+        this.activate(entry, entry.label);
+        return;
+      }
       this.openMenu = this.openMenu === bar ? -1 : bar;
       this.hoverItem = -1;
       this.openSub = -1;
@@ -779,7 +789,18 @@ export class Shell {
       if (k === 'Escape') { this.stopVisualize(); return; }
       if (k === ' ') { this.vis.togglePause(); this.onChange(); return; }
     }
-    if (k === 'Escape') { this.rightClick(); return; }
+    if (k === 'Escape') {
+      // Escape leaves edit mode once nothing is in progress. A deviation: the
+      // original has no key for this, only the Exit EDIT bar item. Kept
+      // because right-click over the plan means expand/contract here, so
+      // without it Escape appears to do nothing at all.
+      if (this.editMode && !this.editOp && this.openMenu < 0) {
+        this.exitEditMode();
+        return;
+      }
+      this.rightClick();
+      return;
+    }
     const cols = menuColumns(this.menus);
     const upper = k.toUpperCase();
     if (this.openMenu < 0) {

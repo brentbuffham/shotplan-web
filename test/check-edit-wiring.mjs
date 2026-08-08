@@ -208,6 +208,39 @@ console.log('\n=== Add > Pattern: Right/DEL abandons it ===');
   check('operation finished', sh.editOp, null);
 }
 
+console.log('\n=== leaving edit mode ===');
+{
+  // "Exit EDIT" is a bar entry with NO dropdown. Clicking a bar entry used to
+  // only toggle a dropdown, so for a leaf that meant nothing happened at all —
+  // edit mode could not be left except by reloading the page. Same for "Data"
+  // and, on the main bar, "Quit".
+  const sh = shellWith();
+  const bar = sh.menus.findIndex((m) => m.label === 'Exit EDIT');
+  check('Exit EDIT has no dropdown', itemsOf(sh.menus[bar]) ?? null, null);
+  const cols = [];
+  {
+    // Click it where the bar actually draws it.
+    let col = 1;
+    for (const m of sh.menus) { cols.push(col); col += m.label.length + 4; }
+  }
+  sh.leftClick(cols[bar] * 8 + 4, 4);
+  check('clicking Exit EDIT leaves edit mode', sh.editMode, false);
+  check('menus are back to the main bar', sh.menus[0].label, 'Files');
+
+  // Escape, when nothing is in progress.
+  const sh2 = shellWith();
+  sh2.key('Escape');
+  check('Escape leaves edit mode when idle', sh2.editMode, false);
+
+  // ...but not while an operation is running: that must finish first.
+  const sh3 = shellWith();
+  choose(sh3, 'Add', 'Hole');
+  sh3.key('Escape');
+  check('Escape finishes the operation first', [sh3.editOp, sh3.editMode], [null, true]);
+  sh3.key('Escape');
+  check('a second Escape then leaves edit mode', sh3.editMode, false);
+}
+
 console.log('\n=== Add > Tie still arms (regression) ===');
 {
   // The edit bar is two levels deep, so `parent` is null here and the handler
