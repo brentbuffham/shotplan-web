@@ -195,8 +195,19 @@ export function parseXel(text) {
   //    > 0   live blast hole. The value varies 1..7 between files and tracks
   //          something per-hole (bench or product index) — not yet pinned down.
   //     0    dummy hole — occupies a record and a position but does not fire.
-  //    < 0   deleted. The magnitude is the free-list link, which is why these
-  //          appear as -33, -49, -65, -160 rather than a constant marker.
+  //    < 0   deleted.
+  //
+  // The free list runs through `fLink`, NOT through the magnitude of `kind`.
+  // Starting at `tables.holeFreePtr` and following `fLink` walks every deleted
+  // record exactly once and then hits 0 — checked on all four samples that
+  // have one: 7/7, 17/17, 53/53 and 56/56 records. Reading `-kind` as the link
+  // instead makes the chain point at itself and never terminate.
+  //
+  // What `-kind` means for a deleted record is still open. It is not constant
+  // (OVERBUR has -33, -49, -65, -160) but it is constant across each
+  // *contiguous run* of deleted records and equals that run's first record
+  // number, which looks like a marker for "removed as one group" — a whole row
+  // or pattern deleted in a single operation.
   //
   // Counting `kind > 0` reproduces the header's blast-hole count exactly for
   // every sample; counting `kind !== 0` does not, because dummies are excluded.
@@ -222,7 +233,11 @@ export function parseXel(text) {
       live: kind > 0,
       dummy: kind === 0,
       deleted: kind < 0,
-      freeLink: kind < 0 ? -kind : null,
+      // Next free record when deleted; 0 ends the chain. See the note above.
+      freeLink: kind < 0 ? int(f[5]) : null,
+      // The run marker described above, kept separate so neither is mistaken
+      // for the other again.
+      deletedGroup: kind < 0 ? -kind : null,
     });
   }
 

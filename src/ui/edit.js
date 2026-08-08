@@ -41,6 +41,142 @@ export const TIE_PROMPT_DELETE =
 export const TIE_PROMPT_CHANGE =
   'Use Left/Ins to select surf. tie type and tie to change or Right/Del to finish.';
 
+/** Add prompts, verbatim from SHOTPLAN.OVR. */
+export const ADD_HOLE_PROMPT =
+  'Add holes using Left/Ins button then press Right/Del button to exit.';
+export const ADD_DUMMY_PROMPT =
+  'Add dummy holes using left/INS button then press right/DEL button to exit';
+export const ADD_LEADIN_PROMPT =
+  'Use Left/INS button to select hole to be initiated or Right/DEL to abort.';
+export const ADD_TEXT_PROMPT =
+  'Select top left corner of text string using Left/INS or Right/DEL or abort.';
+export const ADD_BOUNDARY_PROMPT =
+  'Mark boundary using Left/Ins buttons and cross lines to finish.';
+export const ADD_BENCH_PROMPT =
+  'Mark along crest of the bench using Left/Ins button then Right/Del to finish.';
+export const ADD_PATTERN_PROMPT =
+  'Indicate direction of the first row then Left/Ins or Right/Del to abort.';
+
+/** Refusals, also verbatim. Note the original's own missing full stop. */
+export const OUTSIDE_PLAN =
+  'The selected position outside plan and cannot be used.';
+
+/**
+ * Add a hole, reusing a deleted record when one is free.
+ *
+ * The original keeps a free list rather than growing the table forever: a
+ * deleted record is marked `kind < 0` and linked into a chain whose head is
+ * `tables.holeFreePtr` and whose links are the records' own `fLink`. Adding a
+ * hole pops that chain; only when it is empty does the record count grow.
+ *
+ * Getting this wrong is invisible in the app and corrupting in the file, so it
+ * is worth doing properly: the chain was verified to walk every deleted record
+ * exactly once in all four samples that have one.
+ *
+ * @param {object} plan
+ * @param {number} e, n, rl   position
+ * @param {object} [proto]    fields copied from a template hole (delay, depth,
+ *                            diameter, angle) — v3.0 carries the last-used
+ *                            values forward rather than prompting each time
+ * @returns {{ok: boolean, index?: number, reused?: boolean, reason?: string}}
+ */
+export function addHole(plan, e, n, rl, proto = {}) {
+  const t = plan.tables;
+  const free = t.holeFreePtr | 0;
+  const fields = {
+    e, n, rl: rl ?? null,
+    kind: proto.kind > 0 ? proto.kind : 1,
+    flag: proto.flag ?? 0,
+    fLink: 0,
+    bLink: 0,
+    angle: proto.angle ?? 0,
+    depth: proto.depth ?? 0,
+    dip: proto.dip ?? 0,
+    bearing: proto.bearing ?? 0,
+    delay: proto.delay ?? 1,
+    unknown12: proto.unknown12 ?? 0,
+    live: true, dummy: false, deleted: false,
+    freeLink: null, deletedGroup: null,
+  };
+
+  if (free > 0) {
+    const rec = plan.holes[free - 1];          // hole records are 1-based
+    if (rec && rec.deleted) {
+      t.holeFreePtr = rec.freeLink | 0;        // pop: head becomes the next link
+      Object.assign(rec, fields, { index: rec.index });
+      t.nBlastHoles = (t.nBlastHoles | 0) + 1;
+      return { ok: true, index: rec.index + 1, reused: true };
+    }
+  }
+
+  const rec = { index: plan.holes.length, ...fields };
+  plan.holes.push(rec);
+  t.nHoleRecords = plan.holes.length;
+  t.nBlastHoles = (t.nBlastHoles | 0) + 1;
+  return { ok: true, index: rec.index + 1, reused: false };
+}
+
+/**
+ * Add a dummy hole — a real record at a real position that never fires.
+ *
+ * `kind === 0` is the whole difference. Dummies still take part in the
+ * Delaunay adjacency and so affect contours and relief, which is exactly why
+ * the original offers them: they let you shape the field near a free face
+ * without adding explosive.
+ */
+export function addDummyHole(plan, e, n, rl) {
+  const r = addHole(plan, e, n, rl);
+  if (!r.ok) return r;
+  const rec = plan.holes[r.index - 1];
+  rec.kind = 0;
+  rec.live = false;
+  rec.dummy = true;
+  // Dummies are not blast holes, so undo the count addHole made.
+  plan.tables.nBlastHoles = (plan.tables.nBlastHoles | 0) - 1;
+  return r;
+}
+
+/**
+ * Delete a hole, pushing its record onto the free list.
+ *
+ * The inverse of addHole, and it must be, or the two disagree about the chain.
+ * The new record becomes the head and links to the previous head.
+ */
+export function removeHole(plan, index1) {
+  const rec = plan.holes[index1 - 1];
+  if (!rec || rec.deleted) return false;
+  const t = plan.tables;
+  const wasLive = rec.live;
+  rec.kind = -index1;
+  rec.fLink = t.holeFreePtr | 0;
+  rec.freeLink = t.holeFreePtr | 0;
+  rec.deletedGroup = index1;
+  rec.live = false;
+  rec.dummy = false;
+  rec.deleted = true;
+  t.holeFreePtr = index1;
+  if (wasLive) t.nBlastHoles = Math.max(0, (t.nBlastHoles | 0) - 1);
+
+  // Ties referencing a removed hole would dangle, and v3.0 does not leave
+  // them: removing a hole removes the ties on it.
+  plan.links = plan.links.filter((l) => l.hole1 !== index1 && l.hole2 !== index1);
+  plan.links.forEach((l, i) => { l.index = i; });
+  t.nLinks = plan.links.length;
+  return true;
+}
+
+/** Add a text string at a position. `texts` is modelled by the parser. */
+export function addText(plan, e, n, text, height = 1) {
+  plan.texts.push({ e, n, text, height });
+  return { ok: true, index: plan.texts.length - 1 };
+}
+
+/** Append a vertex to the plan boundary. */
+export function addBoundaryPoint(plan, e, n, rl = 0) {
+  plan.boundary.push({ e, n, rl });
+  return { ok: true, index: plan.boundary.length - 1 };
+}
+
 /** Re-assign an existing tie's surface product. */
 export function changeTieType(plan, index, detonatorType) {
   if (index < 0 || index >= plan.links.length) return false;
