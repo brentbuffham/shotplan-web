@@ -12,7 +12,7 @@
  * canvas — right-drag is a real input, not a page gesture.
  */
 import { WIDTH, BLUE, CYAN, WHITE, YELLOW, BLACK, LIGHTGREY } from '../render/screen.js';
-import { PLOT } from '../render/view.js';
+import { PLOT, TIE_MARKER_PICK } from '../render/view.js';
 import { MENUS, EDIT_MENUS, DEFAULT_TOGGLES, itemsOf } from './menus.js';
 import { ViewState, pickHole } from './viewstate.js';
 import { computeTimes } from '../calc/timing.js';
@@ -20,7 +20,7 @@ import { overlapProbabilities } from '../calc/overlap.js';
 import { timeField } from '../calc/contour.js';
 import { loadPlan, savePlan, importSurvey } from './files.js';
 import {
-  addTie, removeTie, changeTieType, pickTie,
+  addTie, removeTie, changeTieType, pickTie, pickTieMarker,
   TIE_PROMPT_FIRST, TIE_PROMPT_SECOND, TIE_PROMPT_DELETE, TIE_PROMPT_CHANGE,
   addHole, addDummyHole, removeHole,
   addBench, removeBench, pickBenchPoint,
@@ -565,9 +565,10 @@ export class Shell {
     if (this.editMode && (this.editOp === 'TieRemove' || this.editOp === 'TieChange')
         && inPlot(px, py)) {
       const t = this.view.transform();
-      // Tolerance in metres, from a fixed pixel reach, so picking feels the
-      // same at every zoom.
-      const idx = pickTie(this.plan, t.toE(px), t.toN(py), 8 / t.scale);
+      // Pick the marker BOX, not the line. v3.0's picker walks a table of tie
+      // midpoints and accepts a hit within 4 px in each axis, which is why it
+      // draws those little white squares in the first place.
+      const idx = pickTieMarker(this.plan, t, px, py, TIE_MARKER_PICK);
       if (idx < 0) { this.status = ''; this.onChange(); return; }
       if (this.editOp === 'TieRemove') removeTie(this.plan, idx);
       else changeTieType(this.plan, idx, this.armedSlot + 1);
@@ -907,6 +908,39 @@ export class Shell {
     // every edit item fall through to "not implemented yet", which is how the
     // already-wired Add > Tie was silently broken.
     const owner = parent ?? menuLabel;
+
+    // Three-level edit items: Remove > Tie > Single Tie and friends. Here the
+    // bar entry is `menuLabel`, the middle level is `parent`, so both are
+    // needed — "Single Tie" means remove under Remove and re-type under
+    // Change.
+    if (this.editMode && parent) {
+      const key3 = `${menuLabel}|${parent}|${item.label}`;
+      const op3 = {
+        'Remove|Tie|Single Tie': 'TieRemove',
+        'Change|Tie|Single Tie': 'TieChange',
+        'Remove|Holes|Single Hole': 'HoleRemove',
+      }[key3];
+      if (op3) {
+        this.editOp = op3;
+        this.tieFrom = null;
+        if (op3 === 'TieChange' && this.armedSlot < 0) this.armedSlot = 0;
+        this.status = '';
+        this.close();
+        return;
+      }
+      // "All ties" and "All" act at once rather than arming a mode.
+      if (key3 === 'Remove|Tie|All ties') {
+        if (!this.plan.links.length) {
+          this.status = 'There no ties present to delete.';
+        } else {
+          this.plan.links = [];
+          this.plan.tables.nLinks = 0;
+          this.recompute();
+        }
+        this.close();
+        return;
+      }
+    }
 
     // Add and Remove name several things the same way the Tie family does, so
     // the owner decides the operation. Keyed on (owner, item) for that reason

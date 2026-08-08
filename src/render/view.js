@@ -429,15 +429,66 @@ function arrowHead(s, ax, ay, bx, by, c) {
   if (len < 10) return;
   const ux = dx / len, uy = dy / len;
   const size = 4;
-  // v3.0 draws a run of chevrons along the tie rather than one arrowhead,
-  // which reads as direction even where lines cross.
-  for (const at of (len > 26 ? [0.42, 0.58] : [0.5])) {
-    const px = Math.round(ax + dx * at), py = Math.round(ay + dy * at);
+  // v3.0 draws the connector as a TIGHT CLUSTER of chevrons sitting partway
+  // along the tie, not one arrowhead and not chevrons spread down its length.
+  // The line runs the full distance between the holes underneath it, so a tie
+  // reads as "line plus connector symbol" — which is what it is on the bench.
+  //
+  // Taken from screenshots of v3.0 in edit mode rather than from code: the
+  // plot-drawing routine has not been located in the overlay yet, so the count
+  // and spacing here are observed, not read. Everything about the REMOVE
+  // interaction below is from the binary.
+  const n = len > 34 ? 4 : len > 20 ? 3 : 2;
+  const gap = 3;
+  const start = 0.34;
+  const bx0 = ax + dx * start, by0 = ay + dy * start;
+  for (let i = 0; i < n; i++) {
+    const px = Math.round(bx0 + ux * i * gap);
+    const py = Math.round(by0 + uy * i * gap);
     for (const sgn of [1, -1]) {
       const nx = -uy * sgn, ny = ux * sgn;
       s.line(px, py, Math.round(px - ux * size + nx * size * 0.7),
              Math.round(py - uy * size + ny * size * 0.7), c);
     }
+  }
+}
+
+/**
+ * Pick tolerance for a tie marker, in pixels each way.
+ *
+ * From the picker at 0x02A0AA, which compares the cursor against each marker's
+ * stored screen position after `add ax, 4` — so a hit is within 4 px in both
+ * axes. The box is drawn slightly smaller than it picks, as the original does.
+ */
+export const TIE_MARKER_PICK = 4;
+
+/**
+ * Marker boxes for Remove/Change Tie.
+ *
+ * v3.0 does not show these on the plan generally — they appear only once a tie
+ * operation is armed, which is why the remove routine is what builds the
+ * marker table at DS:0x1798 (two words of screen position per tie) rather than
+ * the plot drawing. Removed ties get 0x8008 written into that slot so they
+ * cannot be picked twice; here the tie is simply gone from the list.
+ */
+export function drawTieMarkers(s, plan, t) {
+  if (!t || !plan) return;
+  const byIndex = new Map(plan.holes.map((h) => [h.index + 1, h]));
+  for (const l of plan.links) {
+    const a = byIndex.get(l.hole1);
+    const b = byIndex.get(l.hole2);
+    if (!a || !b || a.e === null || b.e === null) continue;
+    const x = Math.round((t.x(a.e) + t.x(b.e)) / 2);
+    const y = Math.round((t.y(a.n) + t.y(b.n)) / 2);
+    s.fillRect(x - 3, y - 3, x + 3, y + 3, WHITE);
+  }
+}
+
+/** The X cursor v3.0 shows while a tie is being picked for removal. */
+export function drawCrossCursor(s, x, y, colour = WHITE) {
+  for (let i = -4; i <= 4; i++) {
+    s.px(x + i, y + i, colour);
+    s.px(x + i, y - i, colour);
   }
 }
 

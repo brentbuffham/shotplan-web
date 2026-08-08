@@ -131,9 +131,42 @@ if (RELIABILITY_ENABLED) {
  * against a screenshot of v3.0 in edit mode.
  */
 export const EDIT_MENUS = [
+  // Several of these open a THIRD level. Transcribed from the overlay, offsets
+  // relative to base 0x0294B0 where noted; confirmed against a screenshot of
+  // v3.0 with Remove > Tie open, which shows exactly
+  // "Single Tie | Group inside loop | All ties".
+  //
+  // "Group inside loop" is the recurring idea: you draw a lasso and the
+  // operation applies to everything inside it. That is how the original does
+  // bulk edits, and it is worth keeping rather than replacing with a drag-box.
   { label: 'Add', hot: 0, items: ['Hole', 'Pattern', 'Fill-in', 'Bench', 'Dummy hole', 'Tie', 'Lead-in', 'Text', 'Boundary'] },
-  { label: 'Remove', hot: 0, items: ['Holes', 'Bench', 'Tie', 'Lead-in', 'Text', 'Boundary'] },
-  { label: 'Change', hot: 0, items: ['Positions of Holes', 'Hole data', 'Bench', 'In-hole delay', 'Tie', 'Lead-in', 'Coordinates', 'Text', 'Boundary'] },
+  {
+    label: 'Remove', hot: 0,
+    items: [
+      { label: 'Holes', hot: 0, items: ['Single Hole', 'Group inside loop', 'All'] },
+      { label: 'Bench', hot: 0 },
+      { label: 'Tie', hot: 0, items: ['Single Tie', 'Group inside loop', 'All ties'] }, // cs:1021
+      { label: 'Lead-in', hot: 0 },
+      { label: 'Text', hot: 0 },
+      { label: 'Boundary', hot: 0 },
+    ],
+  },
+  {
+    label: 'Change', hot: 0,
+    items: [
+      { label: 'Positions of Holes', hot: 0 },
+      { label: 'Hole data', hot: 0 },
+      { label: 'Bench', hot: 0, items: ['Move point', 'Add point', 'Remove point'] },
+      { label: 'In-hole delay', hot: 0 },
+      // The overlay carries a short and a long form of this one; the long form
+      // adds the two Flip entries.
+      { label: 'Tie', hot: 0, items: ['Single Tie', 'Group inside loop', 'Types swap', 'Flip single tie', 'Flip group inside loop'] },
+      { label: 'Lead-in', hot: 0 },
+      { label: 'Coordinates', hot: 0, items: ['Change origin', 'Rescale distances', 'Pivot about hole'] },
+      { label: 'Text', hot: 0, items: ['Change text string', 'Move position of text'] },
+      { label: 'Boundary', hot: 0, items: ['Add point', 'Remove point', 'Move Point'] },
+    ],
+  },
   { label: 'Show', hot: 0, items: [
     { label: 'Collars only shown', hot: 0 },
     { label: 'Ties', hot: 0, toggle: 'ties' },

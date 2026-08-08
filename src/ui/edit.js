@@ -422,8 +422,39 @@ export function removeTie(plan, index) {
 }
 
 /**
+ * The tie whose MARKER BOX is under the cursor, in screen pixels.
+ *
+ * This is how v3.0 picks a tie, and it is not the same as picking the line.
+ * The picker at 0x02A0AA walks a table of per-tie marker positions and accepts
+ * a hit within 4 pixels in each axis — so you click the little box at the
+ * midpoint, not the tie anywhere along its length. With ties crossing each
+ * other constantly that is the more precise gesture, and it is why the boxes
+ * are drawn at all.
+ *
+ * @param {object} t   screen transform, for x()/y()
+ * @returns {number} index into plan.links, or -1
+ */
+export function pickTieMarker(plan, t, px, py, tol = 4) {
+  const byIndex = new Map(plan.holes.map((h) => [h.index + 1, h]));
+  let best = -1;
+  let bestD = Infinity;
+  plan.links.forEach((l, i) => {
+    const a = byIndex.get(l.hole1);
+    const b = byIndex.get(l.hole2);
+    if (!a || !b || a.e === null || b.e === null) return;
+    const x = (t.x(a.e) + t.x(b.e)) / 2;
+    const y = (t.y(a.n) + t.y(b.n)) / 2;
+    // A box, not a radius: the original compares each axis separately.
+    if (Math.abs(px - x) > tol || Math.abs(py - y) > tol) return;
+    const d = Math.hypot(px - x, py - y);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  return best;
+}
+
+/**
  * The tie nearest a world position, within `tol` metres of the segment.
- * Used by Remove and Change.
+ * Kept for callers that want line proximity rather than the marker box.
  */
 export function pickTie(plan, e, n, tol) {
   const byIndex = new Map(plan.holes.map((h) => [h.index + 1, h]));

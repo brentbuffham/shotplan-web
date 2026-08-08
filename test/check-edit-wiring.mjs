@@ -15,7 +15,7 @@ import { itemsOf } from '../src/ui/menus.js';
 import { PLOT } from '../src/render/view.js';
 import {
   ADD_HOLE_PROMPT, ADD_DUMMY_PROMPT, BENCH_PROMPT_MARK,
-  HOLE_REMOVE_PROMPT, BENCH_REMOVE_PROMPT, BENCH_TOO_SHORT,
+  HOLE_REMOVE_PROMPT, BENCH_REMOVE_PROMPT, BENCH_TOO_SHORT, TIE_PROMPT_DELETE,
 } from '../src/ui/edit.js';
 import {
   PATTERN_PROMPT_ORIGIN, PATTERN_PROMPT_DIRECTION, PATTERN_PROMPT_SIZE,
@@ -206,6 +206,58 @@ console.log('\n=== Add > Pattern: Right/DEL abandons it ===');
   check('no pattern record added', sh.plan.patternTable.patterns.length, pats);
   check('state cleared', sh.pattern, null);
   check('operation finished', sh.editOp, null);
+}
+
+console.log('\n=== Remove > Tie > Single Tie (three levels) ===');
+{
+  // The edit menus go three deep here, so both the bar entry and the middle
+  // level are needed: "Single Tie" means remove under Remove and re-type
+  // under Change.
+  const sh = shellWith();
+  const bar = sh.menus.findIndex((m) => m.label === 'Remove');
+  sh.openMenu = bar;
+  const items = itemsOf(sh.menus[bar]);
+  sh.openSub = items.findIndex((it) => (it.label ?? it) === 'Tie');
+  check('Remove > Tie has a submenu',
+    itemsOf(items[sh.openSub]).map((x) => x.label ?? x),
+    ['Single Tie', 'Group inside loop', 'All ties']);
+  sh.activate({ label: 'Single Tie' }, 'Remove');
+  check('arms a tie removal', sh.editOp, 'TieRemove');
+  check('prompt', sh.statusLine(), TIE_PROMPT_DELETE);
+
+  // Picking is by the marker BOX at the tie midpoint, not the line.
+  const t = sh.view.transform();
+  const l = sh.plan.links[0];
+  const by = new Map(sh.plan.holes.map((h) => [h.index + 1, h]));
+  const a = by.get(l.hole1), b = by.get(l.hole2);
+  const mx = Math.round((t.x(a.e) + t.x(b.e)) / 2);
+  const my = Math.round((t.y(a.n) + t.y(b.n)) / 2);
+  const before = sh.plan.links.length;
+
+  // A click on the LINE but away from the midpoint must miss.
+  const qx = Math.round(t.x(a.e) * 0.75 + t.x(b.e) * 0.25);
+  const qy = Math.round(t.y(a.n) * 0.75 + t.y(b.n) * 0.25);
+  if (Math.hypot(qx - mx, qy - my) > 6) {
+    sh.leftClick(qx, qy);
+    check('clicking the line away from the box misses', sh.plan.links.length, before);
+  }
+  sh.leftClick(mx, my);
+  check('clicking the box removes the tie', sh.plan.links.length, before - 1);
+  check('link count header agrees', sh.plan.tables.nLinks, sh.plan.links.length);
+  check('stays armed for the next one', sh.editOp, 'TieRemove');
+}
+
+console.log('\n=== Remove > Tie > All ties ===');
+{
+  const sh = shellWith();
+  const bar = sh.menus.findIndex((m) => m.label === 'Remove');
+  sh.openMenu = bar;
+  const items = itemsOf(sh.menus[bar]);
+  sh.openSub = items.findIndex((it) => (it.label ?? it) === 'Tie');
+  sh.activate({ label: 'All ties' }, 'Remove');
+  check('every tie gone', sh.plan.links.length, 0);
+  check('header agrees', sh.plan.tables.nLinks, 0);
+  check('acts at once rather than arming a mode', sh.editOp, null);
 }
 
 console.log('\n=== leaving edit mode ===');

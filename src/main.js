@@ -1,5 +1,5 @@
 import { Screen, mount } from './render/screen.js';
-import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawTiePreview, drawBenchPreview, drawPatternPreview, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
+import { drawScreen, drawEnvelope, drawOverlap, drawContours, drawRelief, drawReliefLegend, drawQuantities, drawEditMenuBar, drawTiePreview, drawBenchPreview, drawPatternPreview, drawTieMarkers, drawCrossCursor, drawEditStrip, drawCursorSprite, CURSOR_START, CURSOR_END, drawMenuBar, drawDetonatorBar, drawStatusBar } from './render/view.js';
 import { parseXel, planBounds } from './format/xel.js';
 import { DEMO_PLAN_XEL } from './format/demo-plan-data.js';
 import { Shell, drawMenus, attachInput } from './ui/shell.js';
@@ -111,6 +111,12 @@ function render() {
     if (shell.editOp === 'Tie') {
       drawTiePreview(screen, shell.plan, shell.view.transform(),
         shell.tieFrom, shell.pointer, shell.armedSlot + 1);
+    }
+    // Picking a tie: v3.0 puts a small white box at each tie's midpoint and
+    // turns the cursor into an X. The boxes exist only in these modes.
+    if (shell.editOp === 'TieRemove' || shell.editOp === 'TieChange') {
+      drawTieMarkers(screen, shell.plan, shell.view.transform());
+      if (shell.pointer) drawCrossCursor(screen, shell.pointer.x, shell.pointer.y);
     }
     if (shell.editOp === 'Pattern') {
       drawPatternPreview(screen, shell.view.transform(), shell.pattern);
