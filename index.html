@@ -147,7 +147,17 @@
         Right/DEL finishes, and the pointer carries the mode rather than the
         status line, which is how the original keeps your eye on the plan.
         Marking a bench crest previews as you go and only commits on Right/DEL.
-        Still to come: Pattern and Fill-in, lead-ins, and the Change family.
+        Add&nbsp;&gt;&nbsp;Pattern places a drill pattern in the original's three
+        steps — leading hole, direction of the first row, then expand or
+        contract to accept — previewing throughout and committing only on the
+        last click. Still to come: Fill-in, lead-ins, and the Change family.
+      </p>
+      <p>
+        The pattern geometry was measured rather than assumed. Regenerating
+        <code>DHDETC.XEL</code>'s 200 holes from the parameters stored in the
+        plan itself reproduces every one of them to within a millimetre, which
+        is also what identified a hole's <code>kind</code> field: it is the
+        pattern's id plus one, with 1 meaning the hole belongs to no pattern.
       </p>
       <p>
         The Calculations menu counts six, not seven. SHOTPlan contains a
